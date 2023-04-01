@@ -1,0 +1,211 @@
+---
+title: "TSA Final Project"
+author: "Angela Zeng, Kristen Trinh, Eliza Henderson"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+geometry: margin=2.54cm
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,tidy.opts=list(width.cutoff=80), tidy=FALSE) 
+```
+
+## Set up
+```{r message=FALSE}
+#Load libraries 
+library(readxl)
+library(tidyverse)
+library(Kendall)
+library(tseries)
+library(forecast)
+library(kableExtra)
+```
+
+##Import and process data 
+```{r}
+#import dataset 
+data_import<- read_excel(path="./Data/ERCOT_annual_generation_data.xlsx",
+                sheet="Generation Data",col_names=TRUE)
+
+#extract full years
+data_import<- data_import%>%
+  filter(Year <= 2022)
+
+#pivot_wider
+df<- data_import%>% 
+  pivot_wider(names_from = c(Year), values_from = c(Jan, Feb, Mar, Apr,May,Jun,
+                                                    Jul, Aug, Sep,Oct, Nov, Dec))
+#transpose and fix row and column names 
+tdf<- t(df)
+df<- as.data.frame(tdf)
+rm(tdf)
+colnames(df)<- df[1,]
+df<- df[2:nrow(df),]
+df$date<- rownames(df)
+rownames(df)<- NULL
+
+#process date column 
+df<- df[,c(ncol(df),1:(ncol(df)-1))]
+date<-strsplit(df$date,split="_")
+date<-as.data.frame(matrix(unlist(date),ncol=2,byrow=T))
+date<- my(paste(date$V1, date$V2))
+df$date<- date
+rm(date)
+df<- df %>% arrange(date)
+
+#fixing the two wind columns 
+df$Wind<- ifelse(is.na(df$Wind), df$Wnd, df$Wind)
+df<- subset(df, select=-c(Wnd))
+
+#fixing the two "other" columns 
+df$Other<- ifelse(is.na(df$Other), df$Oth, df$Other)
+df<- subset(df, select=-c(Oth))
+
+#convert all numbers to numeric class 
+df[,2:ncol(df)] <- apply(df[,2:ncol(df)], 2, as.numeric)
+
+#convert all numbers to be in the 1000s (new unit: 1000s MWh)
+df[,2:ncol(df)] <- df[,2:ncol(df)]/1000
+
+#extract Coal, Gas, Hydro, Nuclear, and Wind columns 
+df<- select(df, date, Coal, Gas, Hydro, Nuclear, Wind)
+
+#select data that we will use for forecasting (excludes last year)
+df_short<- df %>% filter(year(date) < 2022)
+```
+
+##Dataset summary 
+Add a table that summarizes your data structure (variables, units, ranges and/or central tendencies, data source if multiple are used, etc.). This table should inserted as a `kable` function in an R chunk. Just show the first 10 rows of your data. Do not include the code used to generate your table.
+```{r echo=FALSE}
+summary<- data.frame(matrix(nrow=0, ncol=5))
+min<- apply(df[2:ncol(df)], 2, min)
+max<- apply(df[2:ncol(df)], 2, max)
+mean<- apply(df[2:ncol(df)], 2, mean)
+#can add more summary rows 
+df_10<- df[1:10,2:6] #first ten rows of the data 
+summary<- rbind(summary, round(min,2), round(max,2), round(mean,2), df_10)
+
+colnames(summary)<- colnames(df)[2:length(colnames(df))]
+Description<- c("min","max","mean",as.character(df[1:10,1]))
+summary<- cbind(Description, summary)
+
+kable(summary, 
+      caption = "ERCOT Generation (in 1000s MWh)") %>%
+  kable_styling(full_width = FALSE, position = "center") %>%
+  pack_rows(index = c("Summary of Data" = 3, "Data" = 10))
+```
+
+
+##Visualizing the data 
+```{r}
+ggplot(df_short) +
+  geom_line(aes(x = date, y = `Coal`, color = "Coal")) +
+  geom_line(aes(x = date, y = `Gas`, color = "Gas")) +
+  geom_line(aes(x = date, y = `Hydro`, color = "Hydro")) +
+  geom_line(aes(x = date, y = `Nuclear`, color = "Nuclear")) +
+  geom_line(aes(x = date, y = `Wind`, color = "Wind")) +
+  scale_color_manual(values = c("Coal" = "#D55E00", "Gas" = "#009E73", 
+                                "Hydro" = "#0072B2", "Nuclear"="#F0E442", "Wind"="#CC79A7"))+
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
+  labs(color="",
+       title = 'ERCOT Monthly Generation',
+       y='Generation (1000 MWh)',
+       x='Year')+
+  theme_light()+
+  theme(legend.position = "bottom")
+```
+
+##Create TS objects and visualize ACF and PACF
+```{r}
+#create time series object (excludes 2022)
+ts_data<- ts(df_short[,(2:6)], frequency = 12, start = c(2008,1))
+
+#plot time series, Acf, and Pacf
+par(mfrow=c(1,3))
+for(i in 1:5){
+  plot(df_short$date,ts_data[,i],type="l",col="blue",
+       ylab="Generation (1000 MWh)",xlab=NA,main=colnames(ts_data)[i])
+  acf(ts_data[,i],lag.max=40, plot=TRUE,main=colnames(ts_data)[i])
+  pacf(ts_data[,i],lag.max=40, plot=TRUE,main=colnames(ts_data)[i])
+}
+```
+
+##Working with COAL data
+```{r}
+#Seasonal Mann-Kendall
+SMK_coal <- SeasonalMannKendall(ts_data[,1])
+print("Results for Seasonal Mann Kendall")
+print(summary(SMK_coal))
+#p value is < 0.05: reject null hypothesis, data follow a trend
+
+#agumented dickey fuller test (ADF)
+#Null hypothesis is that data has a unit root
+print("Results for ADF test")
+print(adf.test(ts_data[,1],alternative = "stationary"))
+#p value > 0.05 then accept null hypothesis, data has a unit root, i.e., stochastic trend
+
+#coal time series needs to be differenced
+ndiffs(ts_data[,1], 0.05, c("kpss", "adf", "pp"), max.d = 2)
+#only once 
+#WHEN ARE WE DIFFERENCING? 
+
+#decompose the coal time series 
+decompose_coal<- decompose(ts_data[,1], type = "additive")
+plot(decompose_coal) 
+title(sub = "ERCOT Coal Generation", col.sub = "blue")
+#HOW DO WE DECIDE BTW ADDITIVE AND MULTIPLICATIVE?
+
+#deseasonalize the coal time series
+deseasonal_coal <- seasadj(decompose_coal) 
+
+#df with og series and deseasonalized series 
+df_coal <- data.frame(date = df_short$date,
+                        coal = df_short$Coal,
+                        deseasonal_coal = as.numeric(deseasonal_coal))
+
+#plot original and deseasonalized ts over time 
+ggplot(df_coal) +
+  geom_line(aes(x = date, y = `coal`, color = "Original Series")) +
+  geom_line(aes(x = date, y = `deseasonal_coal`, color = "Deseasonalized Series")) +
+  scale_color_manual(values = c("Original Series" = "grey", "Deseasonalized Series" = "#D55E00"))+
+  theme_light()+
+  theme(legend.position = "bottom") +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
+  labs(color="",
+       title = 'Monthly ERCOT Goal Generation',
+       y='Generation (1000s MWh)',
+       x='Year')
+
+#ACF & PACF
+par(mfrow=c(1,2))
+Acf(deseasonal_coal,lag.max=40, plot=TRUE, main = "ACF Deseasonalized Coal Generation")
+Pacf(deseasonal_coal,lag.max=40, plot=TRUE, main = "PACF Deseasonalized Coal Generation")
+#HOW IS LAG MAX CHOSEN?
+
+#apply auto.arima on deseasonalized data 
+des_coal_arima_autofit <- auto.arima(deseasonal_coal, max.D=0,max.P = 0,max.Q=0)
+print(des_coal_arima_autofit)
+
+#forecast with auto arima on deseasonalized data 
+par(mfrow=c(1,1))
+des_coal_arima_forecast <- forecast(object = des_coal_arima_autofit, h = 12)
+plot(des_coal_arima_forecast)
+
+#apply auto.arima on original data 
+og_coal_arima_autofit <- auto.arima(ts_data[,1])
+print(og_coal_arima_autofit)
+
+#forecast with auto arima on original data 
+par(mfrow=c(1,1))
+og_coal_arima_forecast <- forecast(object = og_coal_arima_autofit, h = 12)
+plot(og_coal_arima_forecast)
+
+#forecast with simple exponential smoothing on original data
+og_coal_ses_forecast=ses(y = ts_data[,1], h = 12, holdout = FALSE, silent = FALSE)  
+checkresiduals(og_coal_ses_forecast)
+```
+

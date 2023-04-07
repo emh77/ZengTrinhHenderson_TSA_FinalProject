@@ -1,0 +1,54 @@
+---
+title: "TSA - Final Project Report"
+author: "Angela Zeng, Kristen Trinh, Eliza Henderson"
+output: pdf_document
+geometry: margin=2.54cm
+---
+
+```{r include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+#### Introduction, Motivation, Relevance, Objectives
+
+```{r}
+#REMOVE THIS COMMENT BEFORE SUBMITTING: Write a few paragraphs detailing the rationale for your study. This should include both the context of the topic as well as a rationale for your choice of dataset (reason for location, variables, etc.). You may choose to include citations if you like or any other reference you may have used during the project (optional).
+
+
+
+```
+
+#### Dataset information
+
+```{r}
+#REMOVE THIS COMMENT BEFORE SUBMITTING: Provide information on how the dataset for this analysis were collected (source), the data contained in the dataset (format). Describe how you wrangled/processed your dataset to get the time series object.
+
+#REMOVE THIS COMMENT BEFORE SUBMITTING:Add a table that summarizes your data structure (variables, units, ranges and/or central tendencies, data source if multiple are used, etc.). This table should inserted as a `kable` function in an R chunk. Just show the first 10 rows of your data. Do not include the code used to generate your table.
+```
+
+#### Analysis (Methods and Models)
+
+```{r fig.cap = c("Name 1", "Name 2", "Name etc"), echo = FALSE}
+#REMOVE THIS COMMENT BEFORE SUBMITTING: Describe the analysis and tests that were performed. Described the components of the time series you identified. List any packages and functions used. Include visualizations of your dataset (i.e. time series plot, ACF, PACF, etc). 
+
+#REMOVE THIS COMMENT BEFORE SUBMITTING: Format your R chunks so that graphs are displayed but code is not displayed. Accompany these graphs with text sections that describe the visualizations and provide context for further analyses.
+
+#REMOVE THIS COMMENT BEFORE SUBMITTING: Each figure should be accompanied by a caption, and referenced within the text if applicable.
+```
+
+
+
+#### Summary and Conclusions
+
+```{r}
+#REMOVE THIS COMMENT BEFORE SUBMITTING: Summarize your major findings from your analyses in a few paragraphs and plots. What conclusions do you draw from your findings? Any insights on how to improve the model?
+
+```
+
+
+
+
+
+
+
+

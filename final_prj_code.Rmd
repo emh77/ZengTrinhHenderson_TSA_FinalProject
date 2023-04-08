@@ -28,7 +28,7 @@ library(kableExtra)
 ##Import and process data 
 ```{r}
 #import dataset 
-data_import<- read_excel(path="./Data/ERCOT_annual_generation_data.xlsx",
+data_import<- read_excel(path="./ERCOT_annual_generation_data.xlsx",
                 sheet="Generation Data",col_names=TRUE)
 
 #extract full years

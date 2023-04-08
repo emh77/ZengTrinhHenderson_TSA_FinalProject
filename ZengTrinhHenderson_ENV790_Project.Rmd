@@ -10,20 +10,25 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 ```
 
 #### Introduction, Motivation, Relevance, Objectives
-Testing update with text here.
-```{r}
-#REMOVE THIS COMMENT BEFORE SUBMITTING: Write a few paragraphs detailing the rationale for your study. This should include both the context of the topic as well as a rationale for your choice of dataset (reason for location, variables, etc.). You may choose to include citations if you like or any other reference you may have used during the project (optional).
+REMOVE THIS COMMENT BEFORE SUBMITTING: Write a few paragraphs detailing the rationale for your study. This should include both the context of the topic as well as a rationale for your choice of dataset (reason for location, variables, etc.). You may choose to include citations if you like or any other reference you may have used during the project (optional).
 
+This project forecasts ERCOT monthly generation by fuel type to analyze energy transition trends. As a leader in renewable energy generation in the United States, ERCOT serves as an example of how development and adoption may play out across the country. Texas has long boasted the highest energy production from renewables due in large part to its strong wind resources and development-friendly business environment and is expected to surpass California in solar in 2023 (https://insideclimatenews.org/news/09032023/inside-clean-energy-texas-renewables/#:~:text=No%2C%20it's%20not%20California.,thanks%20largely%20to%20wind%20energy.). 
+ERCOT serves as an ideal case study due to its depth and breadth of clear, available data. Regulated utilities typically to not publish wide sets of operational data whereas Independent System Operators (ISOs) are required to do so to inform market participation. Furthermore, ERCOT's streamlined market structure is well suited to the auto-regressive nature of this project. Unlike other ISOs, ERCOT does not have a capacity market, thus future capacity buildouts are more directly correlated to energy price signals instead of multiple factors.
 
-
-```
+A interconnection queue dataset was also included in this study as an optional external factor to include in the model. Queue data identifies planned projects and their progress in interconnection permitting. The dataset captures Feasibility Study status which may be used as a proxy indicator for likelihood of development and timeline of buildout. Projects that have completed this study are more likely to be built and sooner than those who are "not started" or "in-progress."
 
 #### Dataset information
 
-```{r}
-#REMOVE THIS COMMENT BEFORE SUBMITTING: Provide information on how the dataset for this analysis were collected (source), the data contained in the dataset (format). Describe how you wrangled/processed your dataset to get the time series object.
+<<REMOVE THIS COMMENT BEFORE SUBMITTING: Provide information on how the dataset for this analysis were collected (source), the data contained in the dataset (format). Describe how you wrangled/processed your dataset to get the time series object.>>
+All data for this analysis were collected from ERCOT's website. The primary data used detail historical monthly generation by fuel type. Annual excel reports were pulled for the years 2008 to 2022 and aggregated into a single excel document. This document maintained the same formatting structure of the original reports with a column for fuel type and each month (a total of 13). One additional column was added to indicate year.
 
+The aggregated excel document was loaded into r for further processing. After importing the data as a new dataframe, it was organized by date according to fuel type. This involved wrangling the data with a pivot_wider function to create a date field with year and month and then transposing the data. After converting the date field to a date values, the data was then further cleaned by aggregating columns of the same fuel type that originally used different naming conventions. For wind this meant combining "wind" and "wnd" columns a a similar process occured for "other". Next the production values were converted to numeric and then from GWh to MWh. Lastly 2022 data were filtered out of the dataframe and it was converted into a time series with monthly frequency (12) and start date of January 2008.
+
+The second sheet of the aggregated excel file included a summary of February 2023 queue data. This sheet was organized with a row for each fuel type and columns for "Not Started", "In Progress", and "Complete" Feasibility studies. Values reflect MW capacity for each.
+
+```{r}
 #REMOVE THIS COMMENT BEFORE SUBMITTING:Add a table that summarizes your data structure (variables, units, ranges and/or central tendencies, data source if multiple are used, etc.). This table should inserted as a `kable` function in an R chunk. Just show the first 10 rows of your data. Do not include the code used to generate your table.
+
 ```
 
 #### Analysis (Methods and Models)

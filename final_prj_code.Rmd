@@ -19,6 +19,7 @@ knitr::opts_chunk$set(echo = TRUE,tidy.opts=list(width.cutoff=80), tidy=FALSE)
 #Load libraries 
 library(readxl)
 library(tidyverse)
+library(lubridate)
 library(Kendall)
 library(tseries)
 library(forecast)
@@ -158,6 +159,7 @@ decompose_coal<- decompose(ts_data[,1], type = "additive")
 plot(decompose_coal) 
 title(sub = "ERCOT Coal Generation", col.sub = "blue")
 #HOW DO WE DECIDE BTW ADDITIVE AND MULTIPLICATIVE?
+#from google, additive means the trend is linear (straight line) and multiplicative means there are changes to widiths or heights of seasonal periods over time -k
 
 #deseasonalize the coal time series
 deseasonal_coal <- seasadj(decompose_coal) 
@@ -207,5 +209,44 @@ plot(og_coal_arima_forecast)
 #forecast with simple exponential smoothing on original data
 og_coal_ses_forecast=ses(y = ts_data[,1], h = 12, holdout = FALSE, silent = FALSE)  
 checkresiduals(og_coal_ses_forecast)
+plot(og_coal_ses_forecast, type="l")
+
+```
+
+
+
+```{r}
+#differencing COAL data
+
+coal_diff<- diff(x=df_short[,2], lag=1, differences=1)
+plot(coal_diff, type="l")
+
+#create df with differenced coal
+df_coal_diff <- data.frame(date = df_short$date[(2:168)],
+                        coal = df_short$Coal[(2:168)],
+                        coal_diff = coal_diff)
+
+#create time series object for differenced coal
+ts_coal_diff<- ts(df_coal_diff[,3], frequency = 12, start = c(2008,2))
+
+#do we need to decompose for differenced data?
+decompose_coal_diff<- decompose(ts_coal_diff, type = "additive")
+plot(decompose_coal_diff) 
+title(sub = "ERCOT Differenced Coal Generation", col.sub = "blue")
+
+#ACF & PACF for differenced COAL
+par(mfrow=c(1,2))
+Acf(ts_coal_diff,lag.max=40, plot=TRUE, main = "ACF Differenced Coal Generation")
+Pacf(ts_coal_diff,lag.max=40, plot=TRUE, main = "PACF Differenced Coal Generation")
+
+#differenced coal ARIMA
+diff_coal_arima_autofit <- auto.arima(ts_coal_diff, max.D=0,max.P = 0,max.Q=0)
+print(diff_coal_arima_autofit)
+
+#forecast with auto arima for differenced coal
+par(mfrow=c(1,1))
+diff_coal_arima_forecast <- forecast(object = diff_coal_arima_autofit, h = 12)
+plot(diff_coal_arima_forecast)
+
 ```
 

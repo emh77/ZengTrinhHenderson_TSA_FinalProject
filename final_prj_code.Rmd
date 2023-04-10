@@ -186,7 +186,7 @@ ggplot(df_coal) +
 par(mfrow=c(1,2))
 Acf(deseasonal_coal,lag.max=40, plot=TRUE, main = "ACF Deseasonalized Coal Generation")
 Pacf(deseasonal_coal,lag.max=40, plot=TRUE, main = "PACF Deseasonalized Coal Generation")
-#HOW IS LAG MAX CHOSEN?
+#HOW IS LAG MAX CHOSEN? - I think just vibes -K
 
 #apply auto.arima on deseasonalized data 
 des_coal_arima_autofit <- auto.arima(deseasonal_coal, max.D=0,max.P = 0,max.Q=0)
@@ -248,5 +248,129 @@ par(mfrow=c(1,1))
 diff_coal_arima_forecast <- forecast(object = diff_coal_arima_autofit, h = 12)
 plot(diff_coal_arima_forecast)
 
+#forecast with simple exponential smoothing on differenced coal data
+diff_coal_ses_forecast=ses(y = ts_coal_diff, h = 12, holdout = FALSE, silent = FALSE)  
+checkresiduals(diff_coal_ses_forecast)
+plot(diff_coal_ses_forecast, type="l")
+
+```
+
+
+## Working with GAS Data
+```{r}
+
+#Seasonal Mann-Kendall
+SMK_gas <- SeasonalMannKendall(ts_data[,2])
+print("Results for Seasonal Mann Kendall")
+print(summary(SMK_gas))
+#p value is < 0.05: reject null hypothesis, data follow a trend
+
+#agumented dickey fuller test (ADF)
+#Null hypothesis is that data has a unit root
+print("Results for ADF test")
+print(adf.test(ts_data[,2],alternative = "stationary"))
+#p value > 0.05 then accept null hypothesis, data has a unit root, i.e., stochastic trend
+
+#gas time series needs to be differenced
+ndiffs(ts_data[,2], 0.05, c("kpss", "adf", "pp"), max.d = 2)
+#only once 
+
+
+#decompose the gas time series 
+decompose_gas<- decompose(ts_data[,2], type = "additive")
+plot(decompose_gas) 
+title(sub = "ERCOT Natural Gas Generation", col.sub = "red")
+
+
+#deseasonalize the coal time series
+deseasonal_gas <- seasadj(decompose_gas) 
+
+#df with og series and deseasonalized series 
+df_gas <- data.frame(date = df_short$date,
+                        coal = df_short$Gas,
+                        deseasonal_gas = as.numeric(deseasonal_gas))
+
+#plot original and deseasonalized ts over time - GGPLOT is not working -K
+ggplot(df_gas) +
+  geom_line(aes(x = date, y = `gas`, color = "Original Series")) +
+  geom_line(aes(x = date, y = `deseasonal_gas`, color = "Deseasonalized Series")) +
+  scale_color_manual(values = c("Original Series" = "grey", "Deseasonalized Series" = "#D55E00"))+
+  theme_light()+
+  theme(legend.position = "bottom") +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
+  labs(color="",
+       title = 'Monthly ERCOT Goal Generation',
+       y='Generation (1000s MWh)',
+       x='Year')
+
+#ACF & PACF
+par(mfrow=c(1,2))
+Acf(deseasonal_gas,lag.max=40, plot=TRUE, main = "ACF Deseasonalized Gas Generation")
+Pacf(deseasonal_gas,lag.max=40, plot=TRUE, main = "PACF Deseasonalized Gas Generation")
+
+
+#apply auto.arima on deseasonalized data 
+des_gas_arima_autofit <- auto.arima(deseasonal_gas, max.D=0,max.P = 0,max.Q=0)
+print(des_gas_arima_autofit)
+
+#forecast with auto arima on deseasonalized data 
+par(mfrow=c(1,1))
+des_gas_arima_forecast <- forecast(object = des_gas_arima_autofit, h = 12)
+plot(des_gas_arima_forecast)
+
+#apply auto.arima on original data 
+og_gas_arima_autofit <- auto.arima(ts_data[,2])
+print(og_gas_arima_autofit)
+
+#forecast with auto arima on original data 
+par(mfrow=c(1,1))
+og_gas_arima_forecast <- forecast(object = og_gas_arima_autofit, h = 12)
+plot(og_gas_arima_forecast)
+
+#forecast with simple exponential smoothing on original data
+og_gas_ses_forecast=ses(y = ts_data[,2], h = 12, holdout = FALSE, silent = FALSE)  
+checkresiduals(og_gas_ses_forecast)
+plot(og_gas_ses_forecast, type="l")
+
+```
+
+
+```{r}
+#differencing gas data
+
+gas_diff<- diff(x=df_short[,3], lag=1, differences=1)
+plot(gas_diff, type="l")
+
+#create df with differenced GAS
+df_gas_diff <- data.frame(date = df_short$date[(2:168)],
+                        gas = df_short$Gas[(2:168)],
+                        gas_diff = gas_diff)
+
+#create time series object for differenced GAS
+ts_gas_diff<- ts(df_gas_diff[,3], frequency = 12, start = c(2008,2))
+
+#do we need to decompose for differenced data?
+decompose_gas_diff<- decompose(ts_gas_diff, type = "additive")
+plot(decompose_gas_diff) 
+title(sub = "ERCOT Differenced Gas Generation", col.sub = "pink")
+
+#ACF & PACF for differenced GAS
+par(mfrow=c(1,2))
+Acf(ts_coal_diff,lag.max=40, plot=TRUE, main = "ACF Differenced Gas Generation")
+Pacf(ts_coal_diff,lag.max=40, plot=TRUE, main = "PACF Differenced Gas Generation")
+
+#differenced gas ARIMA
+diff_gas_arima_autofit <- auto.arima(ts_gas_diff, max.D=0,max.P = 0,max.Q=0)
+print(diff_gas_arima_autofit)
+
+#forecast with auto arima for differenced gas
+par(mfrow=c(1,1))
+diff_gas_arima_forecast <- forecast(object = diff_gas_arima_autofit, h = 12)
+plot(diff_gas_arima_forecast)
+
+#forecast with simple exponential smoothing on differenced gas data
+diff_gas_ses_forecast=ses(y = ts_gas_diff, h = 12, holdout = FALSE, silent = FALSE)  
+checkresiduals(diff_gas_ses_forecast)
+plot(diff_gas_ses_forecast, type="l")
 ```
 

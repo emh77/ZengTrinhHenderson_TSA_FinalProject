@@ -78,7 +78,7 @@ df[,2:ncol(df)] <- df[,2:ncol(df)]/1000
 df<- select(df, date, Coal, Gas, Hydro, Nuclear, Wind)
 
 #select data that we will use for forecasting (excludes last year)
-df_short<- df %>% filter(year(date) < 2022)
+df_train<- df %>% filter(year(date) < 2022)
 
 #select data that the forecasts will be tested on 
 df_test<- df %>% filter(year(date) == 2022)
@@ -108,7 +108,7 @@ kable(summary,
 
 ##Visualizing the data 
 ```{r}
-ggplot(df_short) +
+ggplot(df_train) +
   geom_line(aes(x = date, y = `Coal`, color = "Coal")) +
   geom_line(aes(x = date, y = `Gas`, color = "Gas")) +
   geom_line(aes(x = date, y = `Hydro`, color = "Hydro")) +
@@ -128,25 +128,31 @@ ggplot(df_short) +
 ##Create TS objects and visualize ACF and PACF
 ```{r}
 #create time series object (excludes 2022)
-ts_data<- ts(df_short[,(2:6)], frequency = 12, start = c(2008,1))
+ts_train<- ts(df_train[,(2:6)], frequency = 12, start = c(2008,1))
 
 #time series object for just 2022 
 ts_test<- ts(df_test[,(2:6)], frequency = 12, start = c(2022,1))
 
-#plot time series, Acf, and Pacf
+#plot time series, Acf, and Pacf for TRAINing data
 par(mfrow=c(1,3))
 for(i in 1:5){
-  plot(df_short$date,ts_data[,i],type="l",col="blue",
-       ylab="Generation (1000 MWh)",xlab=NA,main=colnames(ts_data)[i])
-  acf(ts_data[,i],lag.max=40, plot=TRUE,main=colnames(ts_data)[i])
-  pacf(ts_data[,i],lag.max=40, plot=TRUE,main=colnames(ts_data)[i])
+  plot(df_train$date,ts_train[,i],type="l",col="blue",
+       ylab="Generation (1000 MWh)",xlab=NA,main=colnames(ts_train)[i])
+  acf(ts_train[,i],lag.max=40, plot=TRUE,main=colnames(ts_train)[i])
+  pacf(ts_train[,i],lag.max=40, plot=TRUE,main=colnames(ts_train)[i])
 }
 ```
 
 ##Working with COAL data
 ```{r}
+#decompose coal data
+decompose_coal<- decompose(ts_train[,1], type = "additive")
+plot(decompose_coal) 
+title(sub = "ERCOT Decomposed Coal Generation", col.sub = "blue")
+deseasonal_coal <- seasadj(decompose_coal) #deseasonalized coal 
+
 #Seasonal Mann-Kendall
-SMK_coal <- SeasonalMannKendall(ts_data[,1])
+SMK_coal <- SeasonalMannKendall(ts_train[,1])
 print("Results for Seasonal Mann Kendall")
 print(summary(SMK_coal))
 #p value is < 0.05: reject null hypothesis, data follow a trend
@@ -154,34 +160,39 @@ print(summary(SMK_coal))
 #agumented dickey fuller test (ADF)
 #Null hypothesis is that data has a unit root
 print("Results for ADF test")
-print(adf.test(ts_data[,1],alternative = "stationary"))
+print(adf.test(ts_train[,1],alternative = "stationary"))
 #p value > 0.05 then accept null hypothesis, data has a unit root, i.e., stochastic trend
 
 #coal time series needs to be differenced
-ndiffs(ts_data[,1], 0.05, c("kpss", "adf", "pp"), max.d = 2)
-#only once 
-#WHEN ARE WE DIFFERENCING? 
+ndiffs(ts_train[,1], 0.05, c("kpss", "adf", "pp"), max.d = 2) #only once 
 
-#decompose the coal time series 
-decompose_coal<- decompose(ts_data[,1], type = "additive")
-plot(decompose_coal) 
-title(sub = "ERCOT Coal Generation", col.sub = "blue")
-#HOW DO WE DECIDE BTW ADDITIVE AND MULTIPLICATIVE?
-#from google, additive means the trend is linear (straight line) and multiplicative means there are changes to widiths or heights of seasonal periods over time -k
+#differencing deseasonalized COAL data
+coal_deseas_diff<- diff(x=deseasonal_coal, lag=1, differences=1)
+plot(coal_deseas_diff, type="l")
 
-#deseasonalize the coal time series
-deseasonal_coal <- seasadj(decompose_coal) 
+#ACF & PACF for deseasonalized COAL
+par(mfrow=c(1,2))
+Acf(deseasonal_coal,lag.max=40, plot=TRUE, main = "ACF Deseasonalized Coal Generation")
+Pacf(deseasonal_coal,lag.max=40, plot=TRUE, main = "PACF Deseasonalized Coal Generation")
 
-#df with og series and deseasonalized series 
-df_coal <- data.frame(date = df_short$date,
-                        coal = df_short$Coal,
-                        deseasonal_coal = as.numeric(deseasonal_coal))
+#ACF & PACF for deseasonalized differenced COAL
+Acf(coal_deseas_diff,lag.max=40, plot=TRUE, main = "ACF Differenced Decomposed Coal")
+Pacf(coal_deseas_diff,lag.max=40, plot=TRUE, main = "PACF Differenced Decomposed Coal")
+par(mfrow=c(1,1))
 
-#plot original and deseasonalized ts over time 
+#create df with deseasonalized  and deseasonalized differenced coal
+df_coal <- data.frame(date = df_train$date[(2:168)],
+                        coal = df_train$Coal[(2:168)],
+                        coal_deseas = as.numeric(deseasonal_coal[(2:168)]), 
+                        coal_deseas_diff = as.numeric(coal_deseas_diff))
+
+#plot original, differenced, and differenced deseasonalized ts over time 
 ggplot(df_coal) +
   geom_line(aes(x = date, y = `coal`, color = "Original Series")) +
-  geom_line(aes(x = date, y = `deseasonal_coal`, color = "Deseasonalized Series")) +
-  scale_color_manual(values = c("Original Series" = "grey", "Deseasonalized Series" = "#D55E00"))+
+  geom_line(aes(x = date, y = `coal_deseas`, color = "Deseasonalized Series")) +
+  geom_line(aes(x = date, y = `coal_deseas_diff`, color = "Deseasonalized Differenced Series")) +
+  scale_color_manual(values = c("Original Series" = "grey39", "Deseasonalized Series" = "#E69F00", 
+                                "Deseasonalized Differenced Series" = "#0072B2"))+
   theme_light()+
   theme(legend.position = "bottom") +
   scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
@@ -189,108 +200,62 @@ ggplot(df_coal) +
        title = 'Monthly ERCOT Goal Generation',
        y='Generation (1000s MWh)',
        x='Year')
-
-#ACF & PACF
-par(mfrow=c(1,2))
-Acf(deseasonal_coal,lag.max=40, plot=TRUE, main = "ACF Deseasonalized Coal Generation")
-Pacf(deseasonal_coal,lag.max=40, plot=TRUE, main = "PACF Deseasonalized Coal Generation")
-#HOW IS LAG MAX CHOSEN? - I think just vibes -K
-
-#apply auto.arima on deseasonalized data 
-des_coal_arima_autofit <- auto.arima(deseasonal_coal, max.D=0,max.P = 0,max.Q=0)
-print(des_coal_arima_autofit)
-
-#forecast with auto arima on deseasonalized data 
-par(mfrow=c(1,1))
-des_coal_arima_forecast <- forecast(object = des_coal_arima_autofit, h = 12)
-plot(des_coal_arima_forecast)
-
-#apply auto.arima on original data 
-og_coal_arima_autofit <- auto.arima(ts_data[,1])
-print(og_coal_arima_autofit)
-
-#forecast with auto arima on original data 
-par(mfrow=c(1,1))
-og_coal_arima_forecast <- forecast(object = og_coal_arima_autofit, h = 12)
-plot(og_coal_arima_forecast)
-
-#forecast with simple exponential smoothing on original data
-og_coal_ses_forecast=ses(y = ts_data[,1], h = 12, holdout = FALSE, silent = FALSE)  
-checkresiduals(og_coal_ses_forecast)
-plot(og_coal_ses_forecast, type="l")
 ```
 
-
+##Coal Forecasting 
 ```{r}
-#differencing COAL data
+#Model 1: deseasonalized differenced coal ARIMA 
+des_diff_coal_arima <- auto.arima(coal_deseas_diff, max.D=0,max.P = 0,max.Q=0)
+print(des_diff_coal_arima)
+#forecast
+des_diff_coal_arima_forecast <- forecast(object = des_diff_coal_arima, h = 12)
+plot(des_diff_coal_arima_forecast)
 
-coal_diff<- diff(x=df_short[,2], lag=1, differences=1)
-plot(coal_diff, type="l")
-
-#create df with differenced coal
-df_coal_diff <- data.frame(date = df_short$date[(2:168)],
-                        coal = df_short$Coal[(2:168)],
-                        coal_diff = coal_diff)
-
-#create time series object for differenced coal
-ts_coal_diff<- ts(df_coal_diff[,3], frequency = 12, start = c(2008,2))
-
-#do we need to decompose for differenced data?
-decompose_coal_diff<- decompose(ts_coal_diff, type = "additive")
-plot(decompose_coal_diff) 
-title(sub = "ERCOT Differenced Coal Generation", col.sub = "blue")
-
-#ACF & PACF for differenced COAL
-par(mfrow=c(1,2))
-Acf(ts_coal_diff,lag.max=40, plot=TRUE, main = "ACF Differenced Coal Generation")
-Pacf(ts_coal_diff,lag.max=40, plot=TRUE, main = "PACF Differenced Coal Generation")
-
-#differenced coal ARIMA
-diff_coal_arima_autofit <- auto.arima(ts_coal_diff, max.D=0,max.P = 0,max.Q=0)
+#Model 2: differenced coal SARIMA
+diff_coal_arima_autofit <- auto.arima(ts_coal_diff)
 print(diff_coal_arima_autofit)
-
-#forecast with auto arima for differenced coal
-par(mfrow=c(1,1))
+#forecast
 diff_coal_arima_forecast <- forecast(object = diff_coal_arima_autofit, h = 12)
 plot(diff_coal_arima_forecast)
 
-#forecast with simple exponential smoothing on differenced coal data
+#Model 3: forecast with simple exponential smoothing on differenced coal data
 diff_coal_ses_forecast=ses(y = ts_coal_diff, h = 12, holdout = FALSE, silent = FALSE)  
 checkresiduals(diff_coal_ses_forecast)
 plot(diff_coal_ses_forecast, type="l")
 
+#Model 4: SS with StructTS() on original data
+coal_ss_model <- StructTS(ts_data[,1], type="BSM",fixed=c(NA,NA,NA,NA)) 
+checkresiduals(coal_ss_model)
+coal_ss_forecast<- forecast(coal_ss_model, h=12)
+plot(coal_ss_forecast)
 ```
 
 ##Scores for Coal Forecasts 
 ```{r}
 #test the accuracy of the models 
-coal1_scores <- accuracy(des_coal_arima_forecast, ts_test[,1], test=NULL)
+coal1_scores <- accuracy(diff_des_coal_arima_forecast, ts_test[,1], test=NULL)
 coal1_scores<- coal1_scores[,c("RMSE","MAPE")]
-coal2_scores <- accuracy(og_coal_arima_forecast, ts_test[,1], test=NULL)
+coal2_scores <- accuracy(diff_coal_arima_forecast, ts_test[,1], test=NULL)
 coal2_scores<- coal2_scores[,c("RMSE","MAPE")]
-coal3_scores <- accuracy(og_coal_ses_forecast, ts_test[,1], test=NULL)
+coal3_scores <- accuracy(diff_coal_ses_forecast, ts_test[,1], test=NULL)
 coal3_scores<- coal3_scores[,c("RMSE","MAPE")]
-coal4_scores <- accuracy(diff_coal_arima_forecast, ts_test[,1], test=NULL)
+coal4_scores <- accuracy(coal_ss_forecast, ts_test[,1], test=NULL)
 coal4_scores<- coal4_scores[,c("RMSE","MAPE")]
-coal5_scores <- accuracy(diff_coal_ses_forecast, ts_test[,1], test=NULL)
-coal5_scores<- coal5_scores[,c("RMSE","MAPE")]
 
-coal_scores <- as.data.frame(rbind(coal1_scores[2,], coal2_scores[2,], coal3_scores[2,], coal4_scores[2,], coal5_scores[2,]))
+coal_scores <- as.data.frame(rbind(coal1_scores[2,], coal2_scores[2,], coal3_scores[2,], coal4_scores[2,]))
 
-coal_score_names<- c("arima on deseasonalized","arima on original","SES on original","differenced arima","SES on differenced")
+coal_score_names<- c("sarima on differenced deseasonalized","arima on differenced","SES on differenced","state space model on original")
 
 coal_scores<- cbind(coal_score_names, coal_scores)
+rm(coal1_scores, coal2_scores, coal3_scores, coal4_scores)
 ```
-
 
 
 ## Working with GAS Data
 ```{r}
-
 #create df with just data from 2012 to 2022
-df_2012_2022<- df_short %>% filter(year(date) > 2011)
+df_2012_2022<- df_train %>% filter(year(date) > 2011)
 ts_data_2012<- ts(df_2012_2022[,(2:6)], frequency = 12, start = c(2012,1))
-
 
 #Seasonal Mann-Kendall
 SMK_gas <- SeasonalMannKendall(ts_data_2012[,2])
@@ -307,12 +272,10 @@ print(adf.test(ts_data_2012[,2],alternative = "stationary"))
 #gas time series does NOT need to be differenced
 ndiffs(ts_data_2012[,2], 0.05, c("kpss", "adf", "pp"), max.d = 2)
 
-
 #decompose the gas time series 
 decompose_gas<- decompose(ts_data_2012[,2], type = "additive")
 plot(decompose_gas) 
 title(sub = "ERCOT Natural Gas Generation", col.sub = "red")
-
 
 #deseasonalize the gas time series
 deseasonal_gas <- seasadj(decompose_gas) 
@@ -326,7 +289,7 @@ df_gas <- data.frame(date = df_2012_2022$date,
 ggplot(df_gas) +
   geom_line(aes(x = date, y = `gas`, color = "Original Series")) +
   geom_line(aes(x = date, y = `deseasonal_gas`, color = "Deseasonalized Series")) +
-  scale_color_manual(values = c("Original Series" = "grey", "Deseasonalized Series" = "#009E73"))+
+  scale_color_manual(values = c("Original Series" = "grey39", "Deseasonalized Series" = "#009E73"))+
   theme_light()+
   theme(legend.position = "bottom") +
   scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
@@ -339,47 +302,404 @@ ggplot(df_gas) +
 par(mfrow=c(1,2))
 Acf(deseasonal_gas,lag.max=40, plot=TRUE, main = "ACF Deseasonalized Gas Generation")
 Pacf(deseasonal_gas,lag.max=40, plot=TRUE, main = "PACF Deseasonalized Gas Generation")
+par(mfrow=c(1,1))
+```
 
-
-#apply auto.arima on deseasonalized data 
+#Gas Forecasting
+```{r}
+#Model 1: apply auto.arima on deseasonalized data 
 des_gas_arima_autofit <- auto.arima(deseasonal_gas, max.D=0,max.P = 0,max.Q=0)
 print(des_gas_arima_autofit)
-
-#forecast with auto arima on deseasonalized data 
-par(mfrow=c(1,1))
+#forecast
 des_gas_arima_forecast <- forecast(object = des_gas_arima_autofit, h = 12)
 plot(des_gas_arima_forecast)
 
-#apply auto.arima on original data 
+#Model 2: apply SARIMA on original data 
 og_gas_arima_autofit <- auto.arima(ts_data_2012[,2])
 print(og_gas_arima_autofit)
-
-#forecast with auto arima on original data 
-par(mfrow=c(1,1))
+#forecast
 og_gas_arima_forecast <- forecast(object = og_gas_arima_autofit, h = 12)
 plot(og_gas_arima_forecast)
 
-#forecast with simple exponential smoothing on original data
+#Model 3: forecast with simple exponential smoothing on original data
 og_gas_ses_forecast=ses(y = ts_data_2012[,2], h = 12, holdout = FALSE, silent = FALSE)  
 checkresiduals(og_gas_ses_forecast)
 plot(og_gas_ses_forecast, type="l")
 
+#Model 4: SS with StructTS()
+gas_ss_model <- StructTS(ts_data_2012[,2], type="BSM",fixed=c(NA,NA,NA,NA)) 
+checkresiduals(gas_ss_model)
+gas_ss_forecast<- forecast(gas_ss_model, h=12)
+plot(gas_ss_forecast)
 ```
 
 ##Scores for Gas Forecasts 
 ```{r}
 #test the accuracy of the models 
-#SOMETHING IS WRONG HERE SIGH
-gas1_scores <- accuracy(des_gas_arima_autofit, ts_test[,2], test=NULL)
+gas1_scores <- accuracy(des_gas_arima_forecast, ts_test[,2], test=NULL)
 gas1_scores<- gas1_scores[,c("RMSE","MAPE")]
 gas2_scores <- accuracy(og_gas_arima_forecast, ts_test[,2], test=NULL)
 gas2_scores<- gas2_scores[,c("RMSE","MAPE")]
 gas3_scores <- accuracy(og_gas_ses_forecast, ts_test[,2], test=NULL)
 gas3_scores<- gas3_scores[,c("RMSE","MAPE")]
+gas4_scores<- accuracy(gas_ss_forecast$mean, ts_test[,2], test=NULL)
+gas4_scores<- gas4_scores[,c("RMSE","MAPE")]
 
-gas_scores <- as.data.frame(rbind(gas1_scores[2,], gas2_scores[2,], gas3_scores[2,]))
-gas_score_names<- c("arima on deseasonalized","arima on original","SES on original")
+gas_scores <- as.data.frame(rbind(gas1_scores[2,], gas2_scores[2,], gas3_scores[2,], gas4_scores))
+gas_score_names<- c("arima on deseasonalized","sarima on original","SES on original", "state space on original")
 gas_scores<- cbind(gas_score_names, gas_scores)
-
+rm(gas1_scores, gas2_scores, gas3_scores, gas4_scores)
 ```
 
+##Hydro 
+```{r}
+#Seasonal Mann-Kendall
+SMK_hydro <- SeasonalMannKendall(ts_train[,3])
+print("Results for Seasonal Mann Kendall")
+print(summary(SMK_hydro))
+#p value is > 0.05: accept null hypothesis, data does not follow a trend 
+
+#agumented dickey fuller test (ADF)
+#Null hypothesis is that data has a unit root
+print("Results for ADF test")
+print(adf.test(ts_train[,3],alternative = "stationary"))
+#p value < 0.05 then reject null hypothesis, data do not have a unit root, i.e., no stochastic trend
+#hydro time series needs NOT need to be differenced
+ndiffs(ts_train[,3], 0.05, c("kpss", "adf", "pp"), max.d = 2)
+
+#decompose the hydro time series 
+decompose_hydro<- decompose(ts_train[,3], type = "additive")
+plot(decompose_hydro) 
+title(sub = "ERCOT Hydro Generation", col.sub = "blue")
+
+#deseasonalize the hydro time series
+deseasonal_hydro <- seasadj(decompose_hydro) 
+
+#df with og series and deseasonalized series 
+df_hydro <- data.frame(date = df_train$date,
+                        hydro = df_train$Hydro,
+                        deseasonal_hydro = as.numeric(deseasonal_hydro))
+
+#plot original and deseasonalized ts over time 
+ggplot(df_hydro) +
+  geom_line(aes(x = date, y = `hydro`, color = "Original Series")) +
+  geom_line(aes(x = date, y = `deseasonal_hydro`, color = "Deseasonalized Series")) +
+  scale_color_manual(values = c("Original Series" = "grey39", "Deseasonalized Series" = "#0072B2"))+
+  theme_light()+
+  theme(legend.position = "bottom") +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
+  labs(color="",
+       title = 'Monthly ERCOT Hydro Generation',
+       y='Generation (1000s MWh)',
+       x='Year')
+
+#ACF & PACF
+par(mfrow=c(1,2))
+Acf(deseasonal_hydro,lag.max=40, plot=TRUE, main = "ACF Deseasonalized Hydro Generation")
+Pacf(deseasonal_hydro,lag.max=40, plot=TRUE, main = "PACF Deseasonalized Hydro Generation")
+par(mfrow=c(1,1))
+```
+
+##Hydro Forecasting 
+```{r}
+#Model 1: apply auto.arima on deseasonalized data 
+des_hydro_arima_autofit <- auto.arima(deseasonal_hydro, max.D=0,max.P = 0,max.Q=0)
+print(des_hydro_arima_autofit)
+#forecast
+des_hydro_arima_forecast <- forecast(object = des_hydro_arima_autofit, h = 12)
+plot(des_hydro_arima_forecast)
+
+#Model 2: SARIMA on original data 
+og_hydro_arima_autofit <- auto.arima(ts_train[,3])
+print(og_hydro_arima_autofit)
+#forecast with auto arima on original data 
+og_hydro_arima_forecast <- forecast(object = og_hydro_arima_autofit, h = 12)
+plot(og_hydro_arima_forecast)
+
+#Model 3: forecast with simple exponential smoothing on original data
+og_hydro_ses_forecast=ses(y = ts_train[,3], h = 12, holdout = FALSE, silent = FALSE)  
+checkresiduals(og_hydro_ses_forecast)
+plot(og_hydro_ses_forecast, type="l")
+
+#Model 4: SS with StructTS()
+hydro_ss_model <- StructTS(ts_train[,3], type="BSM",fixed=c(NA,NA,NA,NA)) 
+checkresiduals(hydro_ss_model)
+hydro_ss_forecast<- forecast(hydro_ss_model, h=12)
+plot(hydro_ss_forecast)
+```
+
+##Scores for Hydro Forecasts 
+```{r}
+#test the accuracy of the models 
+hydro1_scores <- accuracy(des_hydro_arima_forecast, ts_test[,3], test=NULL)
+hydro1_scores<- hydro1_scores[,c("RMSE","MAPE")]
+hydro2_scores <- accuracy(og_hydro_arima_forecast, ts_test[,3], test=NULL)
+hydro2_scores<- hydro2_scores[,c("RMSE","MAPE")]
+hydro3_scores <- accuracy(og_hydro_ses_forecast, ts_test[,3], test=NULL)
+hydro3_scores<- hydro3_scores[,c("RMSE","MAPE")]
+hydro4_scores<- accuracy(hydro_ss_forecast$mean, ts_test[,3])
+hydro4_scores<- hydro4_scores[,c("RMSE","MAPE")]
+
+hydro_scores <- as.data.frame(rbind(hydro1_scores[2,], hydro2_scores[2,], hydro3_scores[2,], hydro4_scores))
+hydro_score_names<- c("arima on deseasonalized","sarima on original","SES on original", "state space on original")
+hydro_scores<- cbind(hydro_score_names, hydro_scores)
+rm(hydro1_scores, hydro2_scores, hydro3_scores, hydro4_scores)
+```
+
+##Nuclear
+```{r}
+#Seasonal Mann-Kendall
+SMK_nuclear <- SeasonalMannKendall(ts_train[,4])
+print("Results for Seasonal Mann Kendall")
+print(summary(SMK_nuclear))
+#p value is > 0.05: accept null hypothesis, data does not follow a trend 
+
+#agumented dickey fuller test (ADF)
+#Null hypothesis is that data has a unit root
+print("Results for ADF test")
+print(adf.test(ts_train[,4],alternative = "stationary"))
+#p value < 0.05 then reject null hypothesis, data do not have a unit root, i.e., no stochastic trend
+#nuclear time series needs NOT need to be differenced
+ndiffs(ts_train[,4], 0.05, c("kpss", "adf", "pp"), max.d = 2)
+
+#decompose the nuclear time series 
+decompose_nuclear<- decompose(ts_train[,4], type = "additive")
+plot(decompose_nuclear) 
+title(sub = "ERCOT Nuclear Generation", col.sub = "blue")
+
+#deseasonalize the hydro time series
+deseasonal_nuclear <- seasadj(decompose_nuclear) 
+
+#df with og series and deseasonalized series 
+df_nuclear <- data.frame(date = df_train$date,
+                        nuclear = df_train$Nuclear,
+                        deseasonal_nuclear = as.numeric(deseasonal_nuclear))
+
+#plot original and deseasonalized ts over time 
+ggplot(df_nuclear) +
+  geom_line(aes(x = date, y = `nuclear`, color = "Original Series")) +
+  geom_line(aes(x = date, y = `deseasonal_nuclear`, color = "Deseasonalized Series")) +
+  scale_color_manual(values = c("Original Series" = "grey", "Deseasonalized Series" = "#F0E442"))+
+  theme_light()+
+  theme(legend.position = "bottom") +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
+  labs(color="",
+       title = 'Monthly ERCOT Nuclear Generation',
+       y='Generation (1000s MWh)',
+       x='Year')
+
+#ACF & PACF
+par(mfrow=c(1,2))
+Acf(deseasonal_nuclear,lag.max=40, plot=TRUE, main = "ACF Deseasonalized Nuclear Generation")
+Pacf(deseasonal_nuclear,lag.max=40, plot=TRUE, main = "PACF Deseasonalized Nuclear Generation")
+par(mfrow=c(1,1))
+```
+
+##Nuclear Forecasting 
+```{r}
+#Model 1: apply auto.arima on deseasonalized data 
+des_nuclear_arima_autofit <- auto.arima(deseasonal_nuclear, max.D=0,max.P = 0,max.Q=0)
+print(des_nuclear_arima_autofit)
+#forecast
+des_nuclear_arima_forecast <- forecast(object = des_nuclear_arima_autofit, h = 12)
+plot(des_nuclear_arima_forecast)
+
+#Model 2: apply SARIMA on original data 
+og_nuclear_arima_autofit <- auto.arima(ts_train[,4])
+print(og_nuclear_arima_autofit)
+#forecast with auto arima on original data 
+og_nuclear_arima_forecast <- forecast(object = og_nuclear_arima_autofit, h = 12)
+plot(og_nuclear_arima_forecast)
+
+#Model 3: forecast with simple exponential smoothing on original data
+og_nuclear_ses_forecast=ses(y = ts_train[,4], h = 12, holdout = FALSE, silent = FALSE)  
+checkresiduals(og_nuclear_ses_forecast)
+plot(og_nuclear_ses_forecast, type="l")
+
+#Model 4: SS with StructTS()
+nuclear_ss_model <- StructTS(ts_train[,4], type="BSM",fixed=c(NA,NA,NA,NA)) 
+checkresiduals(nuclear_ss_model)
+nuclear_ss_forecast<- forecast(nuclear_ss_model, h=12)
+plot(nuclear_ss_forecast)
+```
+
+##Scores for Nuclear Forecasts 
+```{r}
+#test the accuracy of the models 
+nuclear1_scores <- accuracy(des_nuclear_arima_forecast, ts_test[,4], test=NULL)
+nuclear1_scores<- nuclear1_scores[,c("RMSE","MAPE")]
+nuclear2_scores <- accuracy(og_nuclear_arima_forecast, ts_test[,4], test=NULL)
+nuclear2_scores<- nuclear2_scores[,c("RMSE","MAPE")]
+nuclear3_scores <- accuracy(og_nuclear_ses_forecast, ts_test[,4], test=NULL)
+nuclear3_scores<- nuclear3_scores[,c("RMSE","MAPE")]
+nuclear4_scores<- accuracy(nuclear_ss_forecast$mean, ts_test[,4])
+nuclear4_scores<- nuclear4_scores[,c("RMSE","MAPE")]
+
+nuclear_scores <- as.data.frame(rbind(nuclear1_scores[2,], nuclear2_scores[2,], nuclear3_scores[2,], nuclear4_scores))
+nuclear_score_names<- c("arima on deseasonalized","sarima on original","SES on original", "state space model")
+nuclear_scores<- cbind(nuclear_score_names, nuclear_scores)
+rm(nuclear1_scores, nuclear2_scores, nuclear3_scores, nuclear4_scores)
+```
+
+##Wind
+```{r}
+#decompose wind data
+decompose_wind<- decompose(ts_train[,5], type = "additive")
+plot(decompose_wind) 
+title(sub = "ERCOT Decomposed Wind Generation", col.sub = "blue") #can see seasonality and trend
+#deseasonalized wind 
+deseas_wind <- seasadj(decompose_wind) #deseasonalized wind 
+
+#Seasonal Mann-Kendall
+SMK_wind <- SeasonalMannKendall(ts_train[,5])
+print("Results for Seasonal Mann Kendall")
+print(summary(SMK_wind))
+#p value is < 0.05: reject null hypothesis, data do follow a trend 
+
+#agumented dickey fuller test (ADF)
+#Null hypothesis is that data has a unit root
+print("Results for ADF test")
+print(adf.test(ts_train[,5],alternative = "stationary"))
+#p value < 0.05 then reject null hypothesis, data do not have a unit root, i.e., no stochastic trend
+
+#wind time series needs to be differenced
+ndiffs(ts_train[,5], 0.05, c("kpss", "adf", "pp"), max.d = 2) #only once 
+```
+
+
+
+
+
+
+```{r}
+#differencing WIND data
+wind_diff<- diff(x=df_train[,5], lag=1, differences=1)
+plot(wind_diff, type="l")
+
+#create time series object for differenced wind
+ts_wind_diff<- ts(wind_diff, frequency = 12, start = c(2008,2))
+
+
+df_wind <- data.frame(date = df_train$date[(2:168)],
+                        wind = df_train$Wind[(2:168)],
+                        wind_diff = as.numeric(ts_wind_diff), 
+                        wind_diff_deseas = as.numeric(diff_deseas_wind))
+
+
+#df with og series and deseasonalized series 
+df_wind <- data.frame(date = df_train$date,
+                        wind = df_train$Wind,
+                        diff_wind = as.numeric(ts_wind_diff))
+
+#plot original, differenced, and differenced deseasonalized ts over time 
+ggplot(df_wind) +
+  geom_line(aes(x = date, y = `wind`, color = "Original Series")) +
+  geom_line(aes(x = date, y = `deseasonal_wind`, color = "Deseasonalized Series")) +
+  scale_color_manual(values = c("Original Series" = "grey", "Deseasonalized Series" = "#D55E00"))+
+  theme_light()+
+  theme(legend.position = "bottom") +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
+  labs(color="",
+       title = 'Monthly ERCOT Wind Generation',
+       y='Generation (1000s MWh)',
+       x='Year')
+
+#ACF & PACF
+par(mfrow=c(1,2))
+Acf(deseasonal_wind,lag.max=40, plot=TRUE, main = "ACF Deseasonalized Wind Generation")
+Pacf(deseasonal_wind,lag.max=40, plot=TRUE, main = "PACF Deseasonalized Wind Generation")
+par(mfrow=c(1,1))
+```
+
+
+
+
+##Differenced Wind Forecasting
+```{r}
+
+#plot original, differenced, and differenced deseasonalized ts over time 
+ggplot(df_wind) +
+  geom_line(aes(x = date, y = `wind`, color = "Original Series")) +
+  geom_line(aes(x = date, y = `wind_diff`, color = "Differenced Series")) +
+  geom_line(aes(x = date, y = `wind_diff_deseas`, color = "Differenced Deseasonalized Series")) +
+  scale_color_manual(values = c("Original Series" = "grey39", "Differenced Series" = "#E69F00", 
+                                "Differenced Deseasonalized Series" = "#0072B2"))+
+  theme_light()+
+  theme(legend.position = "bottom") +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
+  labs(color="",
+       title = 'Monthly ERCOT Wind Generation',
+       y='Generation (1000s MWh)',
+       x='Year')
+
+
+#ACF & PACF for differenced WIND
+par(mfrow=c(1,2))
+Acf(ts_wind_diff,lag.max=40, plot=TRUE, main = "ACF Differenced Wind Generation")
+Pacf(ts_wind_diff,lag.max=40, plot=TRUE, main = "PACF Differenced Wind Generation")
+par(mfrow=c(1,1))
+
+#ACF & PACF for differenced deseasonalized WIND
+par(mfrow=c(1,2))
+Acf(diff_deseas_wind,lag.max=40, plot=TRUE, main = "ACF Differenced Deseasonalized Wind Generation")
+Pacf(diff_deseas_wind,lag.max=40, plot=TRUE, main = "PACF Differenced Deseasonalized Wind Generation")
+par(mfrow=c(1,1))
+```
+
+##Wind Forecasting 
+```{r}
+#Model 1: differenced deseasonalized wind ARIMA
+diff_deseas_wind_arima <- auto.arima(diff_deseas_wind, max.D=0,max.P = 0,max.Q=0)
+print(diff_deseas_wind_arima)
+#forecast
+diff_deseas_wind_arima_forecast <- forecast(object = diff_deseas_wind_arima, h = 12)
+plot(diff_deseas_wind_arima_forecast)
+
+#Model 2: SARIMA on differenced 
+diff_wind_sarima <- auto.arima(ts_wind_diff)
+print(diff_wind_sarima)
+#forecast
+diff_wind_sarima_forecast <- forecast(object = diff_wind_sarima, h = 12)
+plot(diff_wind_sarima_forecast)
+
+#Model 3: simple exponential smoothing on differenced wind data
+diff_wind_ses_forecast=ses(y = ts_wind_diff, h = 12, holdout = FALSE, silent = FALSE)  
+checkresiduals(diff_wind_ses_forecast)
+plot(diff_coal_ses_forecast, type="l")
+
+#Model 4: SS with StructTS() on original 
+wind_ss_model <- StructTS(ts_train[,5], type="BSM",fixed=c(NA,NA,NA,NA)) 
+checkresiduals(wind_ss_model)
+wind_ss_forecast<- forecast(wind_ss_model, h=12)
+plot(wind_ss_forecast)
+
+#Model 5: SS with StructTS() on deseasonalized 
+wind_ss_model <- StructTS(ts_train[,5], type="BSM",fixed=c(NA,NA,NA,NA)) 
+checkresiduals(wind_ss_model)
+wind_ss_forecast<- forecast(wind_ss_model, h=12)
+plot(wind_ss_forecast)
+
+#Model 6: SS with StructTS() on deseas differenced 
+wind_ss_model <- StructTS(ts_train[,5], type="BSM",fixed=c(NA,NA,NA,NA)) 
+checkresiduals(wind_ss_model)
+wind_ss_forecast<- forecast(wind_ss_model, h=12)
+plot(wind_ss_forecast)
+```
+
+##Scores for Wind Forecasts 
+```{r}
+#test the accuracy of the models 
+wind1_scores <- accuracy(diff_deseas_wind_arima_forecast, ts_test[,5], test=NULL)
+wind1_scores<- wind1_scores[,c("RMSE","MAPE")]
+wind2_scores <- accuracy(diff_wind_sarima_forecast, ts_test[,5], test=NULL)
+wind2_scores<- wind2_scores[,c("RMSE","MAPE")]
+wind3_scores <- accuracy(diff_coal_ses_forecast, ts_test[,5], test=NULL)
+wind3_scores<- wind3_scores[,c("RMSE","MAPE")]
+wind4_scores<- accuracy(wind_ss_forecast$mean, ts_test[,5])
+wind4_scores<- wind4_scores[,c("RMSE","MAPE")]
+
+wind_scores <- as.data.frame(rbind(wind1_scores[2,], wind2_scores[2,], wind3_scores[2,], wind4_scores))
+wind_score_names<- c("arima on diff deseas","sarima on differenced","SES on differenced", "state space on original")
+wind_scores<- cbind(wind_score_names, wind_scores)
+rm(wind1_scores, wind2_scores, wind3_scores, wind4_scores)
+```

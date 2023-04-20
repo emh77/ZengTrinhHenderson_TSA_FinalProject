@@ -1,44 +1,29 @@
 #Final Project Analysis Notes and Summary of Results 
 #Angela Zeng, Kristen Trinh, Eliza Henderson
 
+#NOTES ------------------------------------------------------------------------------------
+#there are blocks of code that are not relevant to the forcasting models used, but if we 
+#could somehow write about the timeseries needing to be differenced and deseasonalized that would be great
+#even though out forecasts don't use the differenced and deseasonalized series 
+#because otherwise, we it doesn't look like we did much. 
+
+
 #DATAFRAME NAMES --------------------------------------------------------------------------
 #raw dataset: data_import 
 #processed and clean data set: df
 #dataset and ts for training: df_train & ts_train
 #dataset and ts for testing: df_test & ts_test
+#gas dataset on a different time scale: df_2012_2022 & ts_data_2012
 
-#PROCESS FOR DIFFERENCING -----------------------------------------------------------------
-#1. decompose the differenced data (to remove seasonality)
-#2. check for deterministic trend & difference the data
-#3. forecast on deseasonalized data 
-#4. forecast on deseasonalized differenced data 
-#^ IS THIS CORRECT??
 
 #TYPES OF FORECASTING MODELS --------------------------------------------------------------
-#arima on deseasonalized
-#sarima on original/ differenced 
-#SES on original/ differenced
-#state space model on original data 
+#sarima on original
+#SSES on original
+#state space model on original  
 
-#COAL -------------------------------------------------------------------------------------
-#Coal needs to be differenced once according to SMK and ADF tests 
-#According to scores, the State Space model is the best. Looks good on plot too. 
-#NEEDS TO BE CHECKED 
-
-#GAS --------------------------------------------------------------------------------------
-#Gas does not need to be differenced 
-#According to the scores, SARIMA on original is the best. Looks good on plot too.
-
-#HYDRO ------------------------------------------------------------------------------------
-#Hydro does not need to be differenced 
-#According to the scores, SARIMA on original or SES on original are good. 
-#The plots all kinda look bad lol 
-
-#NUCLEAR ----------------------------------------------------------------------------------
-#Nuclear does not need to be differenced 
-#According to the scores, SARIMA on original is the best. 
-
-#WIND -------------------------------------------------------------------------------------
+#forecasting only on original data so that the models can be compared equally 
+#therefore, not going to model on deseasonalized data 
+#not going to difference bc all of our models can handle a trend component in the time series 
 
 
 

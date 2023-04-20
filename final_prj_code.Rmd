@@ -24,6 +24,7 @@ library(Kendall)
 library(tseries)
 library(forecast)
 library(kableExtra)
+library(smooth)
 ```
 
 ##Import and process data 
@@ -32,7 +33,7 @@ library(kableExtra)
 data_import<- read_excel(path="./ERCOT_annual_generation_data.xlsx",
                 sheet="Generation Data",col_names=TRUE)
 
-funzies<- data_import[,c(1:3,12:14)] #for show in powerpoint
+ppt_data<- data_import[,c(1:3,12:14)] #for show in powerpoint
 
 #extract full years
 data_import<- data_import%>%
@@ -144,6 +145,7 @@ for(i in 1:5){
 ```
 
 ##Working with COAL data
+##Can maybe scrap this whole code block
 ```{r}
 #decompose coal data
 decompose_coal<- decompose(ts_train[,1], type = "additive")
@@ -200,31 +202,36 @@ ggplot(df_coal) +
        title = 'Monthly ERCOT Goal Generation',
        y='Generation (1000s MWh)',
        x='Year')
-```
 
-##Coal Forecasting 
-```{r}
-#Model 1: deseasonalized differenced coal ARIMA 
+#Model 0: deseasonalized differenced coal ARIMA 
 des_diff_coal_arima <- auto.arima(coal_deseas_diff, max.D=0,max.P = 0,max.Q=0)
 print(des_diff_coal_arima)
 #forecast
 des_diff_coal_arima_forecast <- forecast(object = des_diff_coal_arima, h = 12)
 plot(des_diff_coal_arima_forecast)
 
-#Model 2: differenced coal SARIMA
-diff_coal_arima_autofit <- auto.arima(ts_coal_diff)
-print(diff_coal_arima_autofit)
-#forecast
-diff_coal_arima_forecast <- forecast(object = diff_coal_arima_autofit, h = 12)
-plot(diff_coal_arima_forecast)
-
-#Model 3: forecast with simple exponential smoothing on differenced coal data
+#Model 0: forecast with simple exponential smoothing on differenced coal data
 diff_coal_ses_forecast=ses(y = ts_coal_diff, h = 12, holdout = FALSE, silent = FALSE)  
 checkresiduals(diff_coal_ses_forecast)
 plot(diff_coal_ses_forecast, type="l")
+```
 
-#Model 4: SS with StructTS() on original data
-coal_ss_model <- StructTS(ts_data[,1], type="BSM",fixed=c(NA,NA,NA,NA)) 
+##Coal Forecasting 
+```{r}
+#Model 1: SARIMA
+coal_sarima_autofit <- auto.arima(ts_train[,1])
+print(coal_sarima_autofit)
+#forecast
+coal_sarima_forecast <- forecast(object = coal_sarima_autofit, h = 12)
+plot(coal_sarima_forecast)
+
+#Model 2: Seasonal SES
+coal_sses <- es(ts_train[,1], model="ZZZ", h= 12, holdout=FALSE, silent=F)
+plot(coal_sses)
+checkresiduals(coal_sses)
+
+#Model 3: SS with StructTS()
+coal_ss_model <- StructTS(ts_train[,1], type="BSM",fixed=c(NA,NA,NA,NA)) 
 checkresiduals(coal_ss_model)
 coal_ss_forecast<- forecast(coal_ss_model, h=12)
 plot(coal_ss_forecast)
@@ -233,21 +240,18 @@ plot(coal_ss_forecast)
 ##Scores for Coal Forecasts 
 ```{r}
 #test the accuracy of the models 
-coal1_scores <- accuracy(diff_des_coal_arima_forecast, ts_test[,1], test=NULL)
-coal1_scores<- coal1_scores[,c("RMSE","MAPE")]
-coal2_scores <- accuracy(diff_coal_arima_forecast, ts_test[,1], test=NULL)
-coal2_scores<- coal2_scores[,c("RMSE","MAPE")]
-coal3_scores <- accuracy(diff_coal_ses_forecast, ts_test[,1], test=NULL)
-coal3_scores<- coal3_scores[,c("RMSE","MAPE")]
-coal4_scores <- accuracy(coal_ss_forecast, ts_test[,1], test=NULL)
-coal4_scores<- coal4_scores[,c("RMSE","MAPE")]
+coal1_scores <- accuracy(coal_sarima_forecast, ts_test[,1], test=NULL)
+coal1_scores<- coal1_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
+coal2_scores <- accuracy(coal_sses$forecast, ts_test[,1], test=NULL)
+coal2_scores<- coal2_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
+coal3_scores <- accuracy(coal_ss_forecast, ts_test[,1], test=NULL)
+coal3_scores<- coal3_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
 
-coal_scores <- as.data.frame(rbind(coal1_scores[2,], coal2_scores[2,], coal3_scores[2,], coal4_scores[2,]))
-
-coal_score_names<- c("sarima on differenced deseasonalized","arima on differenced","SES on differenced","state space model on original")
-
+coal_scores <- as.data.frame(rbind(coal1_scores[2,], coal2_scores, coal3_scores[2,]))
+coal_score_names<- c("sarima","SSES","BSM")
 coal_scores<- cbind(coal_score_names, coal_scores)
-rm(coal1_scores, coal2_scores, coal3_scores, coal4_scores)
+rm(coal1_scores, coal2_scores, coal3_scores)
+print(coal_scores)
 ```
 
 
@@ -256,7 +260,10 @@ rm(coal1_scores, coal2_scores, coal3_scores, coal4_scores)
 #create df with just data from 2012 to 2022
 df_2012_2022<- df_train %>% filter(year(date) > 2011)
 ts_data_2012<- ts(df_2012_2022[,(2:6)], frequency = 12, start = c(2012,1))
+```
 
+##Can probably ignore this block
+```{r}
 #Seasonal Mann-Kendall
 SMK_gas <- SeasonalMannKendall(ts_data_2012[,2])
 print("Results for Seasonal Mann Kendall")
@@ -303,30 +310,30 @@ par(mfrow=c(1,2))
 Acf(deseasonal_gas,lag.max=40, plot=TRUE, main = "ACF Deseasonalized Gas Generation")
 Pacf(deseasonal_gas,lag.max=40, plot=TRUE, main = "PACF Deseasonalized Gas Generation")
 par(mfrow=c(1,1))
-```
 
-#Gas Forecasting
-```{r}
 #Model 1: apply auto.arima on deseasonalized data 
 des_gas_arima_autofit <- auto.arima(deseasonal_gas, max.D=0,max.P = 0,max.Q=0)
 print(des_gas_arima_autofit)
 #forecast
 des_gas_arima_forecast <- forecast(object = des_gas_arima_autofit, h = 12)
 plot(des_gas_arima_forecast)
+```
 
-#Model 2: apply SARIMA on original data 
-og_gas_arima_autofit <- auto.arima(ts_data_2012[,2])
-print(og_gas_arima_autofit)
+#Gas Forecasting
+```{r}
+#Model 1: SARIMA
+gas_sarima_autofit <- auto.arima(ts_data_2012[,2])
+print(gas_sarima_autofit)
 #forecast
-og_gas_arima_forecast <- forecast(object = og_gas_arima_autofit, h = 12)
-plot(og_gas_arima_forecast)
+gas_sarima_forecast <- forecast(object = gas_sarima_autofit, h = 12)
+plot(gas_sarima_forecast)
 
-#Model 3: forecast with simple exponential smoothing on original data
-og_gas_ses_forecast=ses(y = ts_data_2012[,2], h = 12, holdout = FALSE, silent = FALSE)  
-checkresiduals(og_gas_ses_forecast)
-plot(og_gas_ses_forecast, type="l")
+#Model 2: Seasonal SES
+gas_sses <- es(ts_data_2012[,2], model="ZZZ", h= 12, holdout=FALSE, silent=F)
+plot(gas_sses)
+checkresiduals(gas_sses)
 
-#Model 4: SS with StructTS()
+#Model 3: SS with StructTS()
 gas_ss_model <- StructTS(ts_data_2012[,2], type="BSM",fixed=c(NA,NA,NA,NA)) 
 checkresiduals(gas_ss_model)
 gas_ss_forecast<- forecast(gas_ss_model, h=12)
@@ -336,22 +343,23 @@ plot(gas_ss_forecast)
 ##Scores for Gas Forecasts 
 ```{r}
 #test the accuracy of the models 
-gas1_scores <- accuracy(des_gas_arima_forecast, ts_test[,2], test=NULL)
-gas1_scores<- gas1_scores[,c("RMSE","MAPE")]
-gas2_scores <- accuracy(og_gas_arima_forecast, ts_test[,2], test=NULL)
-gas2_scores<- gas2_scores[,c("RMSE","MAPE")]
-gas3_scores <- accuracy(og_gas_ses_forecast, ts_test[,2], test=NULL)
-gas3_scores<- gas3_scores[,c("RMSE","MAPE")]
-gas4_scores<- accuracy(gas_ss_forecast$mean, ts_test[,2], test=NULL)
-gas4_scores<- gas4_scores[,c("RMSE","MAPE")]
+gas1_scores <- accuracy(gas_sarima_forecast, ts_test[,2], test=NULL)
+gas1_scores<- gas1_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
+gas2_scores <- accuracy(gas_sses$forecast, ts_test[,2], test=NULL)
+gas2_scores<- gas2_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
+gas3_scores <- accuracy(gas_ss_forecast, ts_test[,2], test=NULL)
+gas3_scores<- gas3_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
 
-gas_scores <- as.data.frame(rbind(gas1_scores[2,], gas2_scores[2,], gas3_scores[2,], gas4_scores))
-gas_score_names<- c("arima on deseasonalized","sarima on original","SES on original", "state space on original")
+
+gas_scores <- as.data.frame(rbind(gas1_scores[2,], gas2_scores, gas3_scores[2,]))
+gas_score_names<- c("sarima","SSES","BSM")
 gas_scores<- cbind(gas_score_names, gas_scores)
-rm(gas1_scores, gas2_scores, gas3_scores, gas4_scores)
+rm(gas1_scores, gas2_scores, gas3_scores)
+print(gas_scores)
 ```
 
 ##Hydro 
+##Can ignore this whole code block
 ```{r}
 #Seasonal Mann-Kendall
 SMK_hydro <- SeasonalMannKendall(ts_train[,3])
@@ -398,30 +406,30 @@ par(mfrow=c(1,2))
 Acf(deseasonal_hydro,lag.max=40, plot=TRUE, main = "ACF Deseasonalized Hydro Generation")
 Pacf(deseasonal_hydro,lag.max=40, plot=TRUE, main = "PACF Deseasonalized Hydro Generation")
 par(mfrow=c(1,1))
-```
 
-##Hydro Forecasting 
-```{r}
 #Model 1: apply auto.arima on deseasonalized data 
 des_hydro_arima_autofit <- auto.arima(deseasonal_hydro, max.D=0,max.P = 0,max.Q=0)
 print(des_hydro_arima_autofit)
 #forecast
 des_hydro_arima_forecast <- forecast(object = des_hydro_arima_autofit, h = 12)
 plot(des_hydro_arima_forecast)
+```
 
-#Model 2: SARIMA on original data 
-og_hydro_arima_autofit <- auto.arima(ts_train[,3])
-print(og_hydro_arima_autofit)
-#forecast with auto arima on original data 
-og_hydro_arima_forecast <- forecast(object = og_hydro_arima_autofit, h = 12)
-plot(og_hydro_arima_forecast)
+##Hydro Forecasting 
+```{r}
+#Model 1: SARIMA
+hydro_sarima_autofit <- auto.arima(ts_train[,3])
+print(hydro_sarima_autofit)
+#forecast
+hydro_sarima_forecast <- forecast(object = hydro_sarima_autofit, h = 12)
+plot(hydro_sarima_forecast)
 
-#Model 3: forecast with simple exponential smoothing on original data
-og_hydro_ses_forecast=ses(y = ts_train[,3], h = 12, holdout = FALSE, silent = FALSE)  
-checkresiduals(og_hydro_ses_forecast)
-plot(og_hydro_ses_forecast, type="l")
+#Model 2: Seasonal SES
+hydro_sses <- es(ts_train[,3], model="ZZZ", h= 12, holdout=FALSE, silent=F)
+plot(hydro_sses)
+checkresiduals(hydro_sses)
 
-#Model 4: SS with StructTS()
+#Model 3: SS with StructTS()
 hydro_ss_model <- StructTS(ts_train[,3], type="BSM",fixed=c(NA,NA,NA,NA)) 
 checkresiduals(hydro_ss_model)
 hydro_ss_forecast<- forecast(hydro_ss_model, h=12)
@@ -431,22 +439,22 @@ plot(hydro_ss_forecast)
 ##Scores for Hydro Forecasts 
 ```{r}
 #test the accuracy of the models 
-hydro1_scores <- accuracy(des_hydro_arima_forecast, ts_test[,3], test=NULL)
-hydro1_scores<- hydro1_scores[,c("RMSE","MAPE")]
-hydro2_scores <- accuracy(og_hydro_arima_forecast, ts_test[,3], test=NULL)
-hydro2_scores<- hydro2_scores[,c("RMSE","MAPE")]
-hydro3_scores <- accuracy(og_hydro_ses_forecast, ts_test[,3], test=NULL)
-hydro3_scores<- hydro3_scores[,c("RMSE","MAPE")]
-hydro4_scores<- accuracy(hydro_ss_forecast$mean, ts_test[,3])
-hydro4_scores<- hydro4_scores[,c("RMSE","MAPE")]
+hydro1_scores <- accuracy(hydro_sarima_forecast, ts_test[,3], test=NULL)
+hydro1_scores<- hydro1_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
+hydro2_scores <- accuracy(hydro_sses$forecast, ts_test[,3], test=NULL)
+hydro2_scores<- hydro2_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
+hydro3_scores <- accuracy(hydro_ss_forecast, ts_test[,3], test=NULL)
+hydro3_scores<- hydro3_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
 
-hydro_scores <- as.data.frame(rbind(hydro1_scores[2,], hydro2_scores[2,], hydro3_scores[2,], hydro4_scores))
-hydro_score_names<- c("arima on deseasonalized","sarima on original","SES on original", "state space on original")
+hydro_scores <- as.data.frame(rbind(hydro1_scores[2,], hydro2_scores, hydro3_scores[2,]))
+hydro_score_names<- c("sarima","SSES","BSM")
 hydro_scores<- cbind(hydro_score_names, hydro_scores)
-rm(hydro1_scores, hydro2_scores, hydro3_scores, hydro4_scores)
+rm(hydro1_scores, hydro2_scores, hydro3_scores)
+print(hydro_scores)
 ```
 
 ##Nuclear
+##Can ignore this whole code block 
 ```{r}
 #Seasonal Mann-Kendall
 SMK_nuclear <- SeasonalMannKendall(ts_train[,4])
@@ -493,30 +501,30 @@ par(mfrow=c(1,2))
 Acf(deseasonal_nuclear,lag.max=40, plot=TRUE, main = "ACF Deseasonalized Nuclear Generation")
 Pacf(deseasonal_nuclear,lag.max=40, plot=TRUE, main = "PACF Deseasonalized Nuclear Generation")
 par(mfrow=c(1,1))
-```
 
-##Nuclear Forecasting 
-```{r}
 #Model 1: apply auto.arima on deseasonalized data 
 des_nuclear_arima_autofit <- auto.arima(deseasonal_nuclear, max.D=0,max.P = 0,max.Q=0)
 print(des_nuclear_arima_autofit)
 #forecast
 des_nuclear_arima_forecast <- forecast(object = des_nuclear_arima_autofit, h = 12)
 plot(des_nuclear_arima_forecast)
+```
 
-#Model 2: apply SARIMA on original data 
-og_nuclear_arima_autofit <- auto.arima(ts_train[,4])
-print(og_nuclear_arima_autofit)
-#forecast with auto arima on original data 
-og_nuclear_arima_forecast <- forecast(object = og_nuclear_arima_autofit, h = 12)
-plot(og_nuclear_arima_forecast)
+##Nuclear Forecasting 
+```{r}
+#Model 1: SARIMA
+nuclear_sarima_autofit <- auto.arima(ts_train[,4])
+print(nuclear_sarima_autofit)
+#forecast
+nuclear_sarima_forecast <- forecast(object = nuclear_sarima_autofit, h = 12)
+plot(nuclear_sarima_forecast)
 
-#Model 3: forecast with simple exponential smoothing on original data
-og_nuclear_ses_forecast=ses(y = ts_train[,4], h = 12, holdout = FALSE, silent = FALSE)  
-checkresiduals(og_nuclear_ses_forecast)
-plot(og_nuclear_ses_forecast, type="l")
+#Model 2: Seasonal SES
+nuclear_sses <- es(ts_train[,4], model="ZZZ", h= 12, holdout=FALSE, silent=F)
+plot(nuclear_sses)
+checkresiduals(nuclear_sses)
 
-#Model 4: SS with StructTS()
+#Model 3: SS with StructTS()
 nuclear_ss_model <- StructTS(ts_train[,4], type="BSM",fixed=c(NA,NA,NA,NA)) 
 checkresiduals(nuclear_ss_model)
 nuclear_ss_forecast<- forecast(nuclear_ss_model, h=12)
@@ -526,22 +534,22 @@ plot(nuclear_ss_forecast)
 ##Scores for Nuclear Forecasts 
 ```{r}
 #test the accuracy of the models 
-nuclear1_scores <- accuracy(des_nuclear_arima_forecast, ts_test[,4], test=NULL)
-nuclear1_scores<- nuclear1_scores[,c("RMSE","MAPE")]
-nuclear2_scores <- accuracy(og_nuclear_arima_forecast, ts_test[,4], test=NULL)
-nuclear2_scores<- nuclear2_scores[,c("RMSE","MAPE")]
-nuclear3_scores <- accuracy(og_nuclear_ses_forecast, ts_test[,4], test=NULL)
-nuclear3_scores<- nuclear3_scores[,c("RMSE","MAPE")]
-nuclear4_scores<- accuracy(nuclear_ss_forecast$mean, ts_test[,4])
-nuclear4_scores<- nuclear4_scores[,c("RMSE","MAPE")]
+nuclear1_scores <- accuracy(nuclear_sarima_forecast, ts_test[,4], test=NULL)
+nuclear1_scores<- nuclear1_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
+nuclear2_scores <- accuracy(nuclear_sses$forecast, ts_test[,4], test=NULL)
+nuclear2_scores<- nuclear2_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
+nuclear3_scores <- accuracy(nuclear_ss_forecast, ts_test[,4], test=NULL)
+nuclear3_scores<- nuclear3_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
 
-nuclear_scores <- as.data.frame(rbind(nuclear1_scores[2,], nuclear2_scores[2,], nuclear3_scores[2,], nuclear4_scores))
-nuclear_score_names<- c("arima on deseasonalized","sarima on original","SES on original", "state space model")
+nuclear_scores <- as.data.frame(rbind(nuclear1_scores[2,], nuclear2_scores, nuclear3_scores[2,]))
+nuclear_score_names<- c("sarima","SSES","BSM")
 nuclear_scores<- cbind(nuclear_score_names, nuclear_scores)
-rm(nuclear1_scores, nuclear2_scores, nuclear3_scores, nuclear4_scores)
+rm(nuclear1_scores, nuclear2_scores, nuclear3_scores)
+print(nuclear_scores)
 ```
 
 ##Wind
+##Can ignore this code block 
 ```{r}
 #decompose wind data
 decompose_wind<- decompose(ts_train[,5], type = "additive")
@@ -564,14 +572,7 @@ print(adf.test(ts_train[,5],alternative = "stationary"))
 
 #wind time series needs to be differenced
 ndiffs(ts_train[,5], 0.05, c("kpss", "adf", "pp"), max.d = 2) #only once 
-```
 
-
-
-
-
-
-```{r}
 #differencing WIND data
 wind_diff<- diff(x=df_train[,5], lag=1, differences=1)
 plot(wind_diff, type="l")
@@ -609,13 +610,6 @@ par(mfrow=c(1,2))
 Acf(deseasonal_wind,lag.max=40, plot=TRUE, main = "ACF Deseasonalized Wind Generation")
 Pacf(deseasonal_wind,lag.max=40, plot=TRUE, main = "PACF Deseasonalized Wind Generation")
 par(mfrow=c(1,1))
-```
-
-
-
-
-##Differenced Wind Forecasting
-```{r}
 
 #plot original, differenced, and differenced deseasonalized ts over time 
 ggplot(df_wind) +
@@ -644,10 +638,7 @@ par(mfrow=c(1,2))
 Acf(diff_deseas_wind,lag.max=40, plot=TRUE, main = "ACF Differenced Deseasonalized Wind Generation")
 Pacf(diff_deseas_wind,lag.max=40, plot=TRUE, main = "PACF Differenced Deseasonalized Wind Generation")
 par(mfrow=c(1,1))
-```
 
-##Wind Forecasting 
-```{r}
 #Model 1: differenced deseasonalized wind ARIMA
 diff_deseas_wind_arima <- auto.arima(diff_deseas_wind, max.D=0,max.P = 0,max.Q=0)
 print(diff_deseas_wind_arima)
@@ -667,19 +658,23 @@ diff_wind_ses_forecast=ses(y = ts_wind_diff, h = 12, holdout = FALSE, silent = F
 checkresiduals(diff_wind_ses_forecast)
 plot(diff_coal_ses_forecast, type="l")
 
-#Model 4: SS with StructTS() on original 
-wind_ss_model <- StructTS(ts_train[,5], type="BSM",fixed=c(NA,NA,NA,NA)) 
-checkresiduals(wind_ss_model)
-wind_ss_forecast<- forecast(wind_ss_model, h=12)
-plot(wind_ss_forecast)
+```
 
-#Model 5: SS with StructTS() on deseasonalized 
-wind_ss_model <- StructTS(ts_train[,5], type="BSM",fixed=c(NA,NA,NA,NA)) 
-checkresiduals(wind_ss_model)
-wind_ss_forecast<- forecast(wind_ss_model, h=12)
-plot(wind_ss_forecast)
+##Wind Forecasting 
+```{r}
+#Model 1: SARIMA
+wind_sarima_autofit <- auto.arima(ts_train[,5])
+print(wind_sarima_autofit)
+#forecast
+wind_sarima_forecast <- forecast(object = wind_sarima_autofit, h = 12)
+plot(wind_sarima_forecast)
 
-#Model 6: SS with StructTS() on deseas differenced 
+#Model 2: Seasonal SES
+wind_sses <- es(ts_train[,5], model="ZZZ", h= 12, holdout=FALSE, silent=F)
+plot(wind_sses)
+checkresiduals(wind_sses)
+
+#Model 3: SS with StructTS()
 wind_ss_model <- StructTS(ts_train[,5], type="BSM",fixed=c(NA,NA,NA,NA)) 
 checkresiduals(wind_ss_model)
 wind_ss_forecast<- forecast(wind_ss_model, h=12)
@@ -689,17 +684,16 @@ plot(wind_ss_forecast)
 ##Scores for Wind Forecasts 
 ```{r}
 #test the accuracy of the models 
-wind1_scores <- accuracy(diff_deseas_wind_arima_forecast, ts_test[,5], test=NULL)
-wind1_scores<- wind1_scores[,c("RMSE","MAPE")]
-wind2_scores <- accuracy(diff_wind_sarima_forecast, ts_test[,5], test=NULL)
-wind2_scores<- wind2_scores[,c("RMSE","MAPE")]
-wind3_scores <- accuracy(diff_coal_ses_forecast, ts_test[,5], test=NULL)
-wind3_scores<- wind3_scores[,c("RMSE","MAPE")]
-wind4_scores<- accuracy(wind_ss_forecast$mean, ts_test[,5])
-wind4_scores<- wind4_scores[,c("RMSE","MAPE")]
+wind1_scores <- accuracy(wind_sarima_forecast, ts_test[,5], test=NULL)
+wind1_scores<- wind1_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
+wind2_scores <- accuracy(wind_sses$forecast, ts_test[,5], test=NULL)
+wind2_scores<- wind2_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
+wind3_scores <- accuracy(wind_ss_forecast, ts_test[,5], test=NULL)
+wind3_scores<- wind3_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
 
-wind_scores <- as.data.frame(rbind(wind1_scores[2,], wind2_scores[2,], wind3_scores[2,], wind4_scores))
-wind_score_names<- c("arima on diff deseas","sarima on differenced","SES on differenced", "state space on original")
+wind_scores <- as.data.frame(rbind(wind1_scores[2,], wind2_scores, wind3_scores[2,]))
+wind_score_names<- c("sarima","SSES","BSM")
 wind_scores<- cbind(wind_score_names, wind_scores)
-rm(wind1_scores, wind2_scores, wind3_scores, wind4_scores)
+rm(wind1_scores, wind2_scores, wind3_scores)
+print(wind_scores)
 ```

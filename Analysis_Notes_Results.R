@@ -13,7 +13,6 @@
 #processed and clean data set: df
 #dataset and ts for training: df_train & ts_train
 #dataset and ts for testing: df_test & ts_test
-#gas dataset on a different time scale: df_2012_2022 & ts_data_2012
 
 
 #TYPES OF FORECASTING MODELS --------------------------------------------------------------

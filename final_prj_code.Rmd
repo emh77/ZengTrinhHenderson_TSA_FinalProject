@@ -63,14 +63,15 @@ df<- df %>% arrange(date)
 
 #fixing the two wind columns 
 df$Wind<- ifelse(is.na(df$Wind), df$Wnd, df$Wind)
-df<- subset(df, select=-c(Wnd))
 
 #fixing the two "other" columns 
 df$Other<- ifelse(is.na(df$Other), df$Oth, df$Other)
-df<- subset(df, select=-c(Oth))
 
 #convert all numbers to numeric class 
 df[,2:ncol(df)] <- apply(df[,2:ncol(df)], 2, as.numeric)
+
+#fixing the gas column 
+df$Gas<- ifelse(is.na(df$`Gas-CC`), df$Gas, df$Gas + df$`Gas-CC`)
 
 #convert all numbers to be in the 1000s (new unit: 1000s MWh)
 df[,2:ncol(df)] <- df[,2:ncol(df)]/1000
@@ -211,9 +212,9 @@ des_diff_coal_arima_forecast <- forecast(object = des_diff_coal_arima, h = 12)
 plot(des_diff_coal_arima_forecast)
 
 #Model 0: forecast with simple exponential smoothing on differenced coal data
-diff_coal_ses_forecast=ses(y = ts_coal_diff, h = 12, holdout = FALSE, silent = FALSE)  
-checkresiduals(diff_coal_ses_forecast)
-plot(diff_coal_ses_forecast, type="l")
+#diff_coal_ses_forecast=ses(y = ts_coal_diff, h = 12, holdout = FALSE, silent = FALSE)  
+#checkresiduals(diff_coal_ses_forecast)
+#plot(diff_coal_ses_forecast, type="l")
 ```
 
 ##Coal Forecasting 
@@ -254,18 +255,12 @@ rm(coal1_scores, coal2_scores, coal3_scores)
 print(coal_scores)
 ```
 
-
 ## Working with GAS Data
-```{r}
-#create df with just data from 2012 to 2022
-df_2012_2022<- df_train %>% filter(year(date) > 2011)
-ts_data_2012<- ts(df_2012_2022[,(2:6)], frequency = 12, start = c(2012,1))
-```
 
 ##Can probably ignore this block
 ```{r}
 #Seasonal Mann-Kendall
-SMK_gas <- SeasonalMannKendall(ts_data_2012[,2])
+SMK_gas <- SeasonalMannKendall(ts_train[,2])
 print("Results for Seasonal Mann Kendall")
 print(summary(SMK_gas))
 #p value is < 0.05: reject null hypothesis, data follow a trend
@@ -273,14 +268,14 @@ print(summary(SMK_gas))
 #agumented dickey fuller test (ADF)
 #Null hypothesis is that data has a unit root
 print("Results for ADF test")
-print(adf.test(ts_data_2012[,2],alternative = "stationary"))
+print(adf.test(ts_train[,2],alternative = "stationary"))
 #p value < 0.05 then reject null hypothesis, data does not has a unit root, i.e., stochastic trend
 
-#gas time series does NOT need to be differenced
-ndiffs(ts_data_2012[,2], 0.05, c("kpss", "adf", "pp"), max.d = 2)
+#gas time series needs to be differenced 
+ndiffs(ts_train[,2], 0.05, c("kpss", "adf", "pp"), max.d = 2) #once 
 
 #decompose the gas time series 
-decompose_gas<- decompose(ts_data_2012[,2], type = "additive")
+decompose_gas<- decompose(ts_train[,2], type = "additive")
 plot(decompose_gas) 
 title(sub = "ERCOT Natural Gas Generation", col.sub = "red")
 
@@ -288,8 +283,8 @@ title(sub = "ERCOT Natural Gas Generation", col.sub = "red")
 deseasonal_gas <- seasadj(decompose_gas) 
 
 #df with og series and deseasonalized series 
-df_gas <- data.frame(date = df_2012_2022$date,
-                        gas = df_2012_2022$Gas,
+df_gas <- data.frame(date = df_train$date,
+                        gas = df_train$Gas,
                         deseasonal_gas = as.numeric(deseasonal_gas))
 
 #plot original and deseasonalized ts over time - GGPLOT is not working -K
@@ -312,29 +307,29 @@ Pacf(deseasonal_gas,lag.max=40, plot=TRUE, main = "PACF Deseasonalized Gas Gener
 par(mfrow=c(1,1))
 
 #Model 1: apply auto.arima on deseasonalized data 
-des_gas_arima_autofit <- auto.arima(deseasonal_gas, max.D=0,max.P = 0,max.Q=0)
-print(des_gas_arima_autofit)
+#des_gas_arima_autofit <- auto.arima(deseasonal_gas, max.D=0,max.P = 0,max.Q=0)
+#print(des_gas_arima_autofit)
 #forecast
-des_gas_arima_forecast <- forecast(object = des_gas_arima_autofit, h = 12)
-plot(des_gas_arima_forecast)
+#des_gas_arima_forecast <- forecast(object = des_gas_arima_autofit, h = 12)
+#plot(des_gas_arima_forecast)
 ```
 
 #Gas Forecasting
 ```{r}
 #Model 1: SARIMA
-gas_sarima_autofit <- auto.arima(ts_data_2012[,2])
+gas_sarima_autofit <- auto.arima(ts_train[,2])
 print(gas_sarima_autofit)
 #forecast
 gas_sarima_forecast <- forecast(object = gas_sarima_autofit, h = 12)
 plot(gas_sarima_forecast)
 
 #Model 2: Seasonal SES
-gas_sses <- es(ts_data_2012[,2], model="ZZZ", h= 12, holdout=FALSE, silent=F)
+gas_sses <- es(ts_train[,2], model="ZZZ", h= 12, holdout=FALSE, silent=F)
 plot(gas_sses)
 checkresiduals(gas_sses)
 
 #Model 3: SS with StructTS()
-gas_ss_model <- StructTS(ts_data_2012[,2], type="BSM",fixed=c(NA,NA,NA,NA)) 
+gas_ss_model <- StructTS(ts_train[,2], type="BSM",fixed=c(NA,NA,NA,NA)) 
 checkresiduals(gas_ss_model)
 gas_ss_forecast<- forecast(gas_ss_model, h=12)
 plot(gas_ss_forecast)

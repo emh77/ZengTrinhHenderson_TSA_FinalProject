@@ -2,9 +2,9 @@
 title: "TSA Final Project"
 author: "Angela Zeng, Kristen Trinh, Eliza Henderson"
 output:
+  pdf_document: default
   html_document:
     df_print: paged
-  pdf_document: default
 geometry: margin=2.54cm
 editor_options:
   chunk_output_type: console
@@ -20,7 +20,7 @@ This project forecasts ERCOT monthly generation by fuel type to analyze energy t
 
 ERCOT serves as an ideal case study due to its depth and breadth of clear, available data. Regulated utilities typically to not publish wide sets of operational data whereas Independent System Operators (ISOs) are required to do so to inform market participation. Furthermore, ERCOT's streamlined market structure is well suited to the auto-regressive nature of this project. Unlike other ISOs, ERCOT does not have a capacity market, thus future capacity buildouts are more directly correlated to energy price signals instead of multiple factors.
 
-A interconnection queue dataset was also included in this study as an optional external factor to include in the model. Queue data identifies planned projects and their progress in interconnection permitting. The dataset captures Feasibility Study status which may be used as a proxy indicator for likelihood of development and timeline of buildout. Projects that have completed this study are more likely to be built and sooner than those who are "not started" or "in-progress."
+A interconnection queue dataset was also included in this study as an optional external factor to include in the model. Queue data identifies planned projects and their progress in interconnection permitting. The dataset captures Feasibility Study status which may be used as a proxy indicator for likelihood of development and timeline of buildout. Projects that have completed this study are more likely to be built and sooner than those who are "not started" or "in-progress." This project ultimately did not integrate queue data as an additional regressor given the structure of available data. Adding a term for it would have required manipulating the data into a time series of matching frequency. The authors felt that the level of modification and extrapolation necessary to convert this data would introduce too much noise into the model.  
 
 #### Dataset Information
 
@@ -29,6 +29,14 @@ All data for this analysis were collected from ERCOT's website. The primary data
 The aggregated excel document was loaded into r for further processing. After importing the data as a new dataframe, it was organized by date according to fuel type. This involved wrangling the data with a pivot_wider function to create a date field with year and month and then transposing the data. After converting the date field to a date values, the data was then further cleaned by aggregating columns of the same fuel type that originally used different naming conventions. For wind this meant combining "wind" and "wnd" columns a a similar process occured for "other". Starting in 2012, ERCOT began reporting both "Gas" and "Gas-CC" generation values so those were also combined. Next the production values were converted to numeric and then from GWh to MWh. Lastly 2022 data were filtered out of the dataframe and it was converted into a time series with monthly frequency (12) and start date of January 2008. Solar data was left out as ERCOT only began documenting it separately in 2012.
 
 The second sheet of the aggregated excel file included a summary of February 2023 queue data. This sheet was organized with a row for each fuel type and columns for "Not Started", "In Progress", and "Complete" Feasibility studies. Values reflect MW capacity for each.
+
+```{r include=FALSE}
+#Needed for some of packages to load properly on Eliza's RStudio container
+old.packages <- rownames(installed.packages())[is.na(installed.packages()[, "Priority"])]
+
+# Update all outdated packages
+update.packages(old.packages, ask = FALSE)
+```
 
 ## Set up
 ```{r message=FALSE}
@@ -130,7 +138,7 @@ kable(summary,
 
 The figure below shows all monthly generation input data by data source using the training data (Year 2008 through 2022). It highlights the upward trend of Wind and Gas generation, stable Hydro and Nuclear production, and the downward trend of Coal. Wind, Gas, and Coal all appear to show annual cycles. Gas and Coal show clear summer peaks with a smaller peak in the winter.
 
-```{r fig.cap = "Monthly Generation by Fuel Source (2008-2022)"}
+```{r}
 ggplot(df_train) +
   geom_line(aes(x = date, y = `Coal`, color = "Coal")) +
   geom_line(aes(x = date, y = `Gas`, color = "Gas")) +
@@ -150,21 +158,21 @@ ggplot(df_train) +
 
 ##Create TS objects and visualize ACF and PACF
 
-The training data df was then converted to a time series for initial ACF and PACF analysis and preliminary forecasting. The ACF and PACFs for each generation source showed clear indicators of seasonal auto-regressive characteristics for [Coal, Wind, and Gas] with significant ACF values at lag 12, 24, and 36 and and non-seasonal auto-regressive characteristics for [Nuclear and Hydro].
+The training data df was then converted to a time series for initial ACF and PACF analysis. The descriptions below summarize results captured in the plots for each source's time series, ACF, and PACF that follow.
 
-<<Pull from this to describe each appropriately. Per ChatGPT.In a non-seasonal AR process, the ACF will gradually decrease and decay exponentially towards zero, with no significant spikes at any lags. The PACF will have a sharp cut-off after a certain lag, indicating that only the previous few lags are significantly correlated with the current value, and the remaining lags have no significant effect on the current value.
+Coal: The ACF and PACF for coal show characteristics of a seasonal auto-regressive model. The ACF has significant peaks at lag 12, 24, and 36 while the PACF showed a more sudden cut-off.
 
-Therefore, the characteristic of a non-seasonal AR process is a gradually decreasing ACF with no significant spikes and a PACF with a sharp cut-off after a certain lag.
-The ACF of a seasonal AR process will have significant spikes at multiples of the seasonal lag, indicating the presence of seasonality in the data. The PACF will have similar characteristics as in the non-seasonal case, with a sharp cut-off after a certain lag.
+Gas: Gas shows a clear seasonal AR pattern with significant peaks at at lag 12, 24, and 36 and negative correlation at 6, 18, and 30. Though less distinct, the PACF does show a more sudden decline rather than a gradual decay.
 
-Therefore, the characteristic of a seasonal AR process is a gradually decreasing ACF with significant spikes at multiples of the seasonal lag, and a PACF with a sharp cut-off after a certain lag.
-In a non-seasonal MA process, the ACF will have significant spikes at the first few lags and will decay exponentially towards zero as the lag increases. The PACF will gradually decrease and decay towards zero with no significant spikes at any lags.
+Hydro: Hydro shows less dramatic seasonality in its ACF and clear autoregressive characteristics in the PACF with a sudden drop-off after lag one.
 
-For a seasonal MA process, the ACF will have significant spikes at multiples of the seasonal lag and will decay towards zero between the spikes. The PACF will have similar characteristics as in the non-seasonal case, with a gradual decrease and decay towards zero.
+Nuclear: The ACF and PACF of Nuclear demonstrate characteristics of a non-seasonal moving average model. The ACF shows a sudden cut-off whereas the PACF shows more moderate decay.
 
-Therefore, the characteristic of a non-seasonal MA process is a decaying ACF with significant spikes at the first few lags and a PACF that gradually decreases towards zero with no significant spikes at any lags. The characteristic of a seasonal MA process is a decaying ACF with significant spikes at multiples of the seasonal lag and a PACF that gradually decreases towards zero with no significant spikes at any lags.>>
+Wind: Wind, like hydro, shows less dramatic seasonality in its ACF but clear autoregressive characteristics with slow decay in the ACF and a sudden drop-off after lag one in the PACF.
+
 
 ```{r}
+
 #create time series object (excludes 2022)
 ts_train<- ts(df_train[,(2:6)], frequency = 12, start = c(2008,1))
 
@@ -179,6 +187,7 @@ for(i in 1:5){
   acf(ts_train[,i],lag.max=40, plot=TRUE,main=colnames(ts_train)[i])
   pacf(ts_train[,i],lag.max=40, plot=TRUE,main=colnames(ts_train)[i])
 }
+
 ```
 
 ##Working with COAL data
@@ -577,6 +586,7 @@ print(nuclear_scores)
 ```
 
 ##Wind
+
 ```{r include=FALSE}
 #decompose wind data
 decompose_wind<- decompose(ts_train[,5], type = "additive")

@@ -16,7 +16,7 @@ knitr::opts_chunk$set(echo = FALSE,tidy.opts=list(width.cutoff=80), tidy=FALSE)
 
 #### Introduction, Motivation, Relevance, Objectives
 
-This project forecasts ERCOT monthly generation by fuel type to analyze energy transition trends. As a leader in renewable energy generation in the United States, ERCOT serves as an example of how development and adoption may play out across the country. Texas has long boasted the highest energy production from renewables due in large part to its strong wind resources and development-friendly business environment and is expected to surpass California in solar in 2023 (https://insideclimatenews.org/news/09032023/inside-clean-energy-texas-renewables/#:~:text=No%2C%20it's%20not%20California.,thanks%20largely%20to%20wind%20energy.). 
+This project forecasts ERCOT monthly generation by fuel type to analyze energy transition trends. As a leader in renewable energy generation in the United States, ERCOT serves as an example of how development and adoption may play out across the country. Texas has long boasted the highest energy production from renewables due in large part to its strong wind resources and development-friendly business environment and is expected to surpass California in solar in 2023. [1] 
 
 ERCOT serves as an ideal case study due to its depth and breadth of clear, available data. Regulated utilities typically to not publish wide sets of operational data whereas Independent System Operators (ISOs) are required to do so to inform market participation. Furthermore, ERCOT's streamlined market structure is well suited to the auto-regressive nature of this project. Unlike other ISOs, ERCOT does not have a capacity market, thus future capacity buildouts are more directly correlated to energy price signals instead of multiple factors.
 
@@ -26,7 +26,7 @@ A interconnection queue dataset was also included in this study as an optional e
 
 All data for this analysis were collected from ERCOT's website. The primary data used detail historical monthly generation by fuel type. Annual excel reports were pulled for the years 2008 to 2022 and aggregated into a single excel document. This document maintained the same formatting structure of the original reports with a column for fuel type and each month (a total of 13). One additional column was added to indicate year.
 
-The aggregated excel document was loaded into r for further processing. After importing the data as a new dataframe, it was organized by date according to fuel type. This involved wrangling the data with a pivot_wider function to create a date field with year and month and then transposing the data. After converting the date field to a date values, the data was then further cleaned by aggregating columns of the same fuel type that originally used different naming conventions. For wind this meant combining "wind" and "wnd" columns a a similar process occured for "other". Starting in 2012, ERCOT began reporting both "Gas" and "Gas-CC" generation values so those were also combined. Next the production values were converted to numeric and then from GWh to MWh. Lastly 2022 data were filtered out of the dataframe and it was converted into a time series with monthly frequency (12) and start date of January 2008. Solar data was left out as ERCOT only began documenting it separately in 2012.
+The aggregated excel document was loaded into R for further processing. After importing the data as a new dataframe, it was organized by date according to fuel type. This involved wrangling the data with a pivot_wider function to create a date field with year and month and then transposing the data. After converting the date field to a date values, the data was then further cleaned by aggregating columns of the same fuel type that originally used different naming conventions. For wind this meant combining "wind" and "wnd" columns a a similar process occurred for "other". Starting in 2012, ERCOT began reporting both "Gas" and "Gas-CC" generation values so those were also combined. Next the production values were converted to numeric and then from GWh to MWh. Lastly 2022 data were filtered out of the dataframe and it was converted into a time series with monthly frequency (12) and start date of January 2008. Solar data was left out as ERCOT only began documenting it separately in 2012.
 
 The second sheet of the aggregated excel file included a summary of February 2023 queue data. This sheet was organized with a row for each fuel type and columns for "Not Started", "In Progress", and "Complete" Feasibility studies. Values reflect MW capacity for each.
 
@@ -38,7 +38,7 @@ old.packages <- rownames(installed.packages())[is.na(installed.packages()[, "Pri
 update.packages(old.packages, ask = FALSE)
 ```
 
-## Set up
+
 ```{r message=FALSE, warning=FALSE, include=FALSE}
 #Load libraries 
 library(readxl)
@@ -51,7 +51,7 @@ library(kableExtra)
 library(smooth)
 ```
 
-##Import and process data 
+
 ```{r include=FALSE}
 #import dataset 
 data_import<- read_excel(path="./ERCOT_annual_generation_data.xlsx",
@@ -112,7 +112,7 @@ df_test<- df %>% filter(year(date) == 2022)
 
 ##Dataset summary 
 
-A summary of the final data is broken down below. This table details the min, max, and average generation by source as well as the first 10 months of data.
+A summary of the final data is broken down below. This table details the minimum, maximum, and average generation by source as well as the first 10 months of data.
 
 ```{r echo=FALSE}
 summary<- data.frame(matrix(nrow=0, ncol=5))
@@ -160,15 +160,15 @@ ggplot(df_train) +
 
 The training data df was then converted to a time series for initial ACF and PACF analysis. The descriptions below summarize results captured in the plots for each source's time series, ACF, and PACF that follow.
 
-Coal: The ACF and PACF for coal show characteristics of a seasonal auto-regressive model. The ACF has significant peaks at lag 12, 24, and 36 while the PACF showed a more sudden cut-off.
+**Coal:** The ACF and PACF for coal show characteristics of a seasonal auto-regressive model. The ACF has significant peaks at lag 12, 24, and 36 while the PACF showed a more sudden cut-off.
 
-Gas: Gas shows a clear seasonal AR pattern with significant peaks at at lag 12, 24, and 36 and negative correlation at 6, 18, and 30. Though less distinct, the PACF does show a more sudden decline rather than a gradual decay.
+**Gas:** Gas shows a clear seasonal AR pattern with significant peaks at at lag 12, 24, and 36 and negative correlation at 6, 18, and 30. Though less distinct, the PACF does show a more sudden decline rather than a gradual decay.
 
-Hydro: Hydro shows less dramatic seasonality in its ACF and clear autoregressive characteristics in the PACF with a sudden drop-off after lag one.
+**Hydro:** Hydro shows less dramatic seasonality in its ACF and clear autoregressive characteristics in the PACF with a sudden drop-off after lag one.
 
-Nuclear: The ACF and PACF of Nuclear demonstrate characteristics of a non-seasonal moving average model. The ACF shows a sudden cut-off whereas the PACF shows more moderate decay.
+**Nuclear:** The ACF and PACF of Nuclear demonstrate characteristics of a non-seasonal moving average model. The ACF shows a sudden cut-off whereas the PACF shows more moderate decay.
 
-Wind: Wind, like hydro, shows less dramatic seasonality in its ACF but clear autoregressive characteristics with slow decay in the ACF and a sudden drop-off after lag one in the PACF.
+**Wind:** Wind, like hydro, shows less dramatic seasonality in its ACF but clear autoregressive characteristics with slow decay in the ACF and a sudden drop-off after lag one in the PACF.
 
 
 ```{r include=FALSE}
@@ -195,6 +195,9 @@ for(i in 1:5){
 This report captures results for Seasonal ARIMA, Seasonal Exponential Smoothing, and Seasonal State Space models. Analysis of model performance is broken down by generation source below.
 
 Initial modeling activity also included decomposing the time series for each generation source in order to apply a wider range of models. After deseasoning and differencing the data, the new time series were plotted along with their respective ACF and PACF. These differenced series were then modeled with auto.arima and forecasted accordingly. However, the final set of forecasting models reported here does not use these differenced time series. They instead rely only on the aforementioned models that incorporate seasonality and trend in order to maintain a more apples-to-apples comparison of model performance.
+
+## Coal
+We first analyzed the Coal dataset. We generated and forecasted the three models (SARIMA, SES, StructTS) for the coal data.
 
 ```{r include=FALSE}
 ##Working with COAL data
@@ -295,6 +298,8 @@ plot(coal_ss_forecast)
 ```
 
 ##Accuracy Scores for Coal Forecasts 
+
+We then compared the accuracy scores (ME, RMSE, MAE, MPE, and MAPE) for each of the forecasts.
 ```{r}
 #test the accuracy of the models 
 coal1_scores <- accuracy(coal_sarima_forecast, ts_test[,1], test=NULL)
@@ -310,6 +315,10 @@ coal_scores<- cbind(coal_score_names, coal_scores)
 rm(coal1_scores, coal2_scores, coal3_scores)
 print(coal_scores)
 ```
+
+## Gas
+
+We then analyzed the natural gas dataset. We generated and forecasted the same models for the natural gas data.
 
 ```{r include=FALSE}
 ## Working with GAS Data
@@ -368,7 +377,7 @@ par(mfrow=c(1,1))
 #plot(des_gas_arima_forecast)
 ```
 
-#Gas Forecasting
+##Gas Forecasting
 
 The State Space (StructTS) model performs best for gas as shown in the table of accuracy scores. However, the ACF of residuals of the Exponential Smoothing model once again suggests it better captures trends. It shows no significant lags whereas the StructTS model shows many, thus capturing more than a random component. The SARIMA model outperforms the SES model on some accuracy parameters. 
 
@@ -393,6 +402,8 @@ plot(gas_ss_forecast)
 ```
 
 ##Scores for Gas Forecasts 
+
+We compared the accuracy scores for the three forecasts to determine which model had the best forecast.
 ```{r}
 #test the accuracy of the models 
 gas1_scores <- accuracy(gas_sarima_forecast, ts_test[,2], test=NULL)
@@ -411,6 +422,8 @@ print(gas_scores)
 ```
 
 ##Hydro
+Next, we analyzed the hydropower dataset. We generated and forecasted the same models as the previous datasets.
+
 ```{r include=FALSE}
 #Hydro
 #Seasonal Mann-Kendall
@@ -492,6 +505,8 @@ plot(hydro_ss_forecast)
 ```
 
 ##Scores for Hydro Forecasts 
+We calculated the accuracy scores to confirm which model generated the best forecast for hydro.
+
 ```{r}
 #test the accuracy of the models 
 hydro1_scores <- accuracy(hydro_sarima_forecast, ts_test[,3], test=NULL)
@@ -509,6 +524,7 @@ print(hydro_scores)
 ```
 
 ##Nuclear
+Then, we analyzed the nuclear dataset by generating and forecasting the same models as the previous datasets.
 
 ```{r include=FALSE}
 #Seasonal Mann-Kendall
@@ -590,6 +606,8 @@ plot(nuclear_ss_forecast)
 ```
 
 ##Scores for Nuclear Forecasts 
+We checked the accuracy of each forecast to determine which model was the most accurate.
+
 ```{r}
 #test the accuracy of the models 
 nuclear1_scores <- accuracy(nuclear_sarima_forecast, ts_test[,4], test=NULL)
@@ -607,6 +625,8 @@ print(nuclear_scores)
 ```
 
 ##Wind
+Lastly, we analyzed the wind dataset by generating and forecasting the same models as the previous datasets.
+
 ```{r include=FALSE}
 #decompose wind data
 decompose_wind<- decompose(ts_train[,5], type = "additive")
@@ -742,6 +762,8 @@ plot(wind_ss_forecast)
 ```
 
 ##Scores for Wind Forecasts 
+We calculated the accuracy scores for each model to determine the best model fit.
+
 ```{r}
 #test the accuracy of the models 
 wind1_scores <- accuracy(wind_sarima_forecast, ts_test[,5], test=NULL)
@@ -760,9 +782,13 @@ print(wind_scores)
 
 #### Summary and Conclusions
 
-<<REMOVE THIS COMMENT BEFORE SUBMITTING: Summarize your major findings from your analyses in a few paragraphs and plots. What conclusions do you draw from your findings? Any insights on how to improve the model?>>
-
 Model performance appeared to correlate with level of seasonality. The State Space model performed best for coal and natural gas, both of which showed clear seasonality and autoregressive characteristics in analyzing their ACF and PACF plots. The Seasonal Exponential Smoothing model performed best for hydro and wind, both of which showed moderate seasonality and autoregressive characteristics in analyzing their ACF and PACF plots. Lastly, the SARIMA model performed best for nuclear, which did not show seasonality and illustrated moving average characteristics in its ACF and PACF plots.
 
 The differences in which models suit which generation source also relate to the use of each fuel. Coal and Gas generation fluctuate to meet demand. These sources therefore produce far more electricity to meet summer air conditioning needs in ERCOT and a minor uptick during the winter holiday season. Hydro and wind, are less easily and non-dispatchable respectively so their generation is less tied to demand and more the operating parameters of each technology. Wind generation is in fact counter-cyclical, with relatively more produced in the winter and less in hotter, summer months. Nuclear operates as baseload power and thus demonstrates its own unique generation pattern of consistent production. Furthermore, nuclear buildout in ERCOT effectively halted prior to the start of collected data, so it does not show any trends caused by changing capacity. 
+
+
+#### References
+
+[1] Gearino, D. (2023, March 9). One state generates much, much more renewable energy than any other-and it's not California. Inside Climate News. Retrieved April 26, 2023, from https://insideclimatenews.org/news/09032023/inside-clean-energy-texas-renewables/#:~:text=No%2C%20it's%20not%20California.,thanks%20largely%20to%20wind%20energy 
+
 

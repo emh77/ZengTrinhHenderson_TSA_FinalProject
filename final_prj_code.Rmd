@@ -238,10 +238,7 @@ df_coal <- data.frame(date = df_train$date[(2:168)],
                         coal = df_train$Coal[(2:168)],
                         coal_deseas = as.numeric(deseasonal_coal[(2:168)]), 
                         coal_deseas_diff = as.numeric(coal_deseas_diff))
-```
 
-
-```{r}
 #plot original, differenced, and differenced deseasonalized ts over time 
 ggplot(df_coal) +
   geom_line(aes(x = date, y = `coal`, color = "Original Series")) +
@@ -413,7 +410,7 @@ rm(gas1_scores, gas2_scores, gas3_scores)
 print(gas_scores)
 ```
 
-
+##Hydro
 ```{r include=FALSE}
 #Hydro
 #Seasonal Mann-Kendall
@@ -651,10 +648,7 @@ df_wind <- data.frame(date = df_train$date[(2:168)],
 df_wind <- data.frame(date = df_train$date,
                         wind = df_train$Wind,
                         diff_wind = as.numeric(ts_wind_diff))
-```
 
-
-```{r}
 #plot original, differenced, and differenced deseasonalized ts over time 
 ggplot(df_wind) +
   geom_line(aes(x = date, y = `wind`, color = "Original Series")) +

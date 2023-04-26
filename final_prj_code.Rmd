@@ -1,5 +1,5 @@
 ---
-title: "TSA Final Project"
+title: "Forecasting Generation in ERCOT by Fuel Type"
 author: "Angela Zeng, Kristen Trinh, Eliza Henderson"
 output:
   html_document:
@@ -13,6 +13,7 @@ editor_options:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE,tidy.opts=list(width.cutoff=80), tidy=FALSE) 
 ```
+
 
 #### Introduction, Motivation, Relevance, Objectives
 
@@ -31,11 +32,11 @@ The aggregated excel document was loaded into R for further processing. After im
 The second sheet of the aggregated excel file included a summary of February 2023 queue data. This sheet was organized with a row for each fuel type and columns for "Not Started", "In Progress", and "Complete" Feasibility studies. Values reflect MW capacity for each.
 
 ```{r include=FALSE}
-#Needed for some of packages to load properly on Eliza's RStudio container
-old.packages <- rownames(installed.packages())[is.na(installed.packages()[, "Priority"])]
+#Needed for some of packages to load properly on Eliza's RStudio container, uncomment as needed
+#old.packages <- rownames(installed.packages())[is.na(installed.packages()[, "Priority"])]
 
 # Update all outdated packages
-update.packages(old.packages, ask = FALSE)
+#update.packages(old.packages, ask = FALSE)
 ```
 
 
@@ -110,7 +111,7 @@ df_train<- df %>% filter(year(date) < 2022)
 df_test<- df %>% filter(year(date) == 2022)
 ```
 
-##Dataset summary 
+#### Dataset summary 
 
 A summary of the final data is broken down below. This table details the minimum, maximum, and average generation by source as well as the first 10 months of data.
 
@@ -134,7 +135,7 @@ kable(summary,
 ```
 
 
-##Visualizing the data 
+#### Visualizing the data 
 
 The figure below shows all monthly generation input data by data source using the training data (Year 2008 through 2022). It highlights the upward trend of Wind and Gas generation, stable Hydro and Nuclear production, and the downward trend of Coal. Wind, Gas, and Coal all appear to show annual cycles. Gas and Coal show clear summer peaks with a smaller peak in the winter.
 
@@ -156,7 +157,7 @@ ggplot(df_train) +
   theme(legend.position = "bottom")
 ```
 
-##Create TS objects and visualize ACF and PACF
+#### Create TS objects and visualize ACF and PACF
 
 The training data df was then converted to a time series for initial ACF and PACF analysis. The descriptions below summarize results captured in the plots for each source's time series, ACF, and PACF that follow.
 
@@ -190,16 +191,16 @@ for(i in 1:5){
 
 ```
 
-####Modeling Seasonality and Forecasting Generation
+#### Modeling Seasonality and Forecasting Generation
 
 This report captures results for Seasonal ARIMA, Seasonal Exponential Smoothing, and Seasonal State Space models. Analysis of model performance is broken down by generation source below.
 
 Initial modeling activity also included decomposing the time series for each generation source in order to apply a wider range of models. After deseasoning and differencing the data, the new time series were plotted along with their respective ACF and PACF. These differenced series were then modeled with auto.arima and forecasted accordingly. However, the final set of forecasting models reported here does not use these differenced time series. They instead rely only on the aforementioned models that incorporate seasonality and trend in order to maintain a more apples-to-apples comparison of model performance.
 
-## Coal
+#### Coal
 We first analyzed the Coal dataset. We generated and forecasted the three models (SARIMA, SES, StructTS) for the coal data.
 
-```{r include=FALSE}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 ##Working with COAL data
 #decompose coal data
 decompose_coal<- decompose(ts_train[,1], type = "additive")
@@ -256,10 +257,7 @@ ggplot(df_coal) +
        title = 'Monthly ERCOT Goal Generation',
        y='Generation (1000s MWh)',
        x='Year')
-```
 
-
-```{r include=FALSE}
 #Model 0: deseasonalized differenced coal ARIMA 
 des_diff_coal_arima <- auto.arima(coal_deseas_diff, max.D=0,max.P = 0,max.Q=0)
 print(des_diff_coal_arima)
@@ -273,11 +271,11 @@ plot(des_diff_coal_arima_forecast)
 #plot(diff_coal_ses_forecast, type="l")
 ```
 
-##Coal Forecasting 
+#### Coal Forecasting 
 
 The State Space (StructTS) model performs best for coal as shown in the table of accuracy scores. Although these values are lowest for StructTS, the ACF of residuals suggests the Exponential Smoothing model may better capture the trends as it has fewer significant lags and thus is truly random. 
 
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 #Model 1: SARIMA
 coal_sarima_autofit <- auto.arima(ts_train[,1])
 print(coal_sarima_autofit)
@@ -287,20 +285,23 @@ plot(coal_sarima_forecast)
 
 #Model 2: Seasonal SES
 coal_sses <- es(ts_train[,1], model="ZZZ", h= 12, holdout=FALSE, silent=F)
-plot(coal_sses)
-checkresiduals(coal_sses)
+#plot(coal_sses)
+#checkresiduals(coal_sses)
+#forecast
+coal_sses_forecast<-forecast(coal_sses, h=12, start=c(2008,1))
+plot(coal_sses_forecast)
 
 #Model 3: SS with StructTS()
 coal_ss_model <- StructTS(ts_train[,1], type="BSM",fixed=c(NA,NA,NA,NA)) 
-checkresiduals(coal_ss_model)
+checkresiduals(coal_ss_model, plot=TRUE)
 coal_ss_forecast<- forecast(coal_ss_model, h=12)
 plot(coal_ss_forecast)
 ```
 
-##Accuracy Scores for Coal Forecasts 
+#### Accuracy Scores for Coal Forecasts 
 
 We then compared the accuracy scores (ME, RMSE, MAE, MPE, and MAPE) for each of the forecasts.
-```{r}
+```{r message=FALSE, warning=FALSE}
 #test the accuracy of the models 
 coal1_scores <- accuracy(coal_sarima_forecast, ts_test[,1], test=NULL)
 coal1_scores<- coal1_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
@@ -316,11 +317,11 @@ rm(coal1_scores, coal2_scores, coal3_scores)
 print(coal_scores)
 ```
 
-## Gas
+#### Gas
 
 We then analyzed the natural gas dataset. We generated and forecasted the same models for the natural gas data.
 
-```{r include=FALSE}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 ## Working with GAS Data
 #Seasonal Mann-Kendall
 SMK_gas <- SeasonalMannKendall(ts_train[,2])
@@ -377,11 +378,11 @@ par(mfrow=c(1,1))
 #plot(des_gas_arima_forecast)
 ```
 
-##Gas Forecasting
+#### Gas Forecasting
 
 The State Space (StructTS) model performs best for gas as shown in the table of accuracy scores. However, the ACF of residuals of the Exponential Smoothing model once again suggests it better captures trends. It shows no significant lags whereas the StructTS model shows many, thus capturing more than a random component. The SARIMA model outperforms the SES model on some accuracy parameters. 
 
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 #Model 1: SARIMA
 gas_sarima_autofit <- auto.arima(ts_train[,2])
 print(gas_sarima_autofit)
@@ -391,20 +392,22 @@ plot(gas_sarima_forecast)
 
 #Model 2: Seasonal SES
 gas_sses <- es(ts_train[,2], model="ZZZ", h= 12, holdout=FALSE, silent=F)
-plot(gas_sses)
-checkresiduals(gas_sses)
+#plot(gas_sses)
+#checkresiduals(gas_sses)
+gas_sses_forecast<-forecast(gas_sses, h=12, start=c(2008,1))
+plot(gas_sses_forecast)
 
 #Model 3: SS with StructTS()
 gas_ss_model <- StructTS(ts_train[,2], type="BSM",fixed=c(NA,NA,NA,NA)) 
-checkresiduals(gas_ss_model)
+checkresiduals(gas_ss_model, plot=TRUE)
 gas_ss_forecast<- forecast(gas_ss_model, h=12)
 plot(gas_ss_forecast)
 ```
 
-##Scores for Gas Forecasts 
+#### Scores for Gas Forecasts 
 
 We compared the accuracy scores for the three forecasts to determine which model had the best forecast.
-```{r}
+```{r message=FALSE, warning=FALSE}
 #test the accuracy of the models 
 gas1_scores <- accuracy(gas_sarima_forecast, ts_test[,2], test=NULL)
 gas1_scores<- gas1_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
@@ -421,7 +424,7 @@ rm(gas1_scores, gas2_scores, gas3_scores)
 print(gas_scores)
 ```
 
-##Hydro
+#### Hydro
 Next, we analyzed the hydropower dataset. We generated and forecasted the same models as the previous datasets.
 
 ```{r include=FALSE}
@@ -480,11 +483,11 @@ des_hydro_arima_forecast <- forecast(object = des_hydro_arima_autofit, h = 12)
 plot(des_hydro_arima_forecast)
 ```
 
-##Hydro Forecasting
+#### Hydro Forecasting
 
 The SES model in general performs best for hydro as shown in the table of accuracy scores. Although these values are lowest for SES, the histogram of residuals suggests the StructTS model may better capture the trends as it has a more normal distribution instead of a right tail. 
 
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 #Model 1: SARIMA
 hydro_sarima_autofit <- auto.arima(ts_train[,3])
 print(hydro_sarima_autofit)
@@ -494,17 +497,19 @@ plot(hydro_sarima_forecast)
 
 #Model 2: Seasonal SES
 hydro_sses <- es(ts_train[,3], model="ZZZ", h= 12, holdout=FALSE, silent=F)
-plot(hydro_sses)
-checkresiduals(hydro_sses)
+#plot(hydro_sses)
+checkresiduals(hydro_sses, plot=TRUE)
+hydro_sses_forecast<-forecast(hydro_sses, h=12, start=c(2008,1))
+plot(hydro_sses_forecast)
 
 #Model 3: SS with StructTS()
 hydro_ss_model <- StructTS(ts_train[,3], type="BSM",fixed=c(NA,NA,NA,NA)) 
-checkresiduals(hydro_ss_model)
+#checkresiduals(hydro_ss_model)
 hydro_ss_forecast<- forecast(hydro_ss_model, h=12)
 plot(hydro_ss_forecast)
 ```
 
-##Scores for Hydro Forecasts 
+#### Scores for Hydro Forecasts 
 We calculated the accuracy scores to confirm which model generated the best forecast for hydro.
 
 ```{r}
@@ -523,7 +528,7 @@ rm(hydro1_scores, hydro2_scores, hydro3_scores)
 print(hydro_scores)
 ```
 
-##Nuclear
+#### Nuclear
 Then, we analyzed the nuclear dataset by generating and forecasting the same models as the previous datasets.
 
 ```{r include=FALSE}
@@ -581,34 +586,37 @@ des_nuclear_arima_forecast <- forecast(object = des_nuclear_arima_autofit, h = 1
 plot(des_nuclear_arima_forecast)
 ```
 
-##Nuclear Forecasting 
+#### Nuclear Forecasting 
 
 The SARIMA model performs best for nuclear as shown in the table of accuracy scores. The residuals for SES and StructTS show a similar number of significant ACF lags and distorted (ie not distinctly normal) histograms suggesting the forecasted models do not capture all of the trends.  
 
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 #Model 1: SARIMA
 nuclear_sarima_autofit <- auto.arima(ts_train[,4])
 print(nuclear_sarima_autofit)
+checkresiduals(nuclear_sarima_autofit, plot=TRUE)
 #forecast
 nuclear_sarima_forecast <- forecast(object = nuclear_sarima_autofit, h = 12)
 plot(nuclear_sarima_forecast)
 
 #Model 2: Seasonal SES
 nuclear_sses <- es(ts_train[,4], model="ZZZ", h= 12, holdout=FALSE, silent=F)
-plot(nuclear_sses)
-checkresiduals(nuclear_sses)
+#plot(nuclear_sses)
+#checkresiduals(nuclear_sses)
+nuclear_sses_forecast<-forecast(nuclear_sses, h=12, start=c(2008,1))
+plot(nuclear_sses_forecast)
 
 #Model 3: SS with StructTS()
 nuclear_ss_model <- StructTS(ts_train[,4], type="BSM",fixed=c(NA,NA,NA,NA)) 
-checkresiduals(nuclear_ss_model)
+#checkresiduals(nuclear_ss_model)
 nuclear_ss_forecast<- forecast(nuclear_ss_model, h=12)
 plot(nuclear_ss_forecast)
 ```
 
-##Scores for Nuclear Forecasts 
+#### Scores for Nuclear Forecasts 
 We checked the accuracy of each forecast to determine which model was the most accurate.
 
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 #test the accuracy of the models 
 nuclear1_scores <- accuracy(nuclear_sarima_forecast, ts_test[,4], test=NULL)
 nuclear1_scores<- nuclear1_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
@@ -624,10 +632,10 @@ rm(nuclear1_scores, nuclear2_scores, nuclear3_scores)
 print(nuclear_scores)
 ```
 
-##Wind
+#### Wind
 Lastly, we analyzed the wind dataset by generating and forecasting the same models as the previous datasets.
 
-```{r include=FALSE}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #decompose wind data
 decompose_wind<- decompose(ts_train[,5], type = "additive")
 plot(decompose_wind) 
@@ -658,90 +666,92 @@ plot(wind_diff, type="l")
 ts_wind_diff<- ts(wind_diff, frequency = 12, start = c(2008,2))
 
 
-df_wind <- data.frame(date = df_train$date[(2:168)],
-                        wind = df_train$Wind[(2:168)],
-                        wind_diff = as.numeric(ts_wind_diff), 
-                        wind_diff_deseas = as.numeric(diff_deseas_wind))
+#df_wind <- data.frame(date = df_train$date[(2:168)],
+ #                       wind = df_train$Wind[(2:168)],
+  #                      wind_diff = as.numeric(ts_wind_diff), 
+   #                     wind_diff_deseas = as.numeric(diff_deseas_wind))
 
 
 #df with og series and deseasonalized series 
-df_wind <- data.frame(date = df_train$date,
-                        wind = df_train$Wind,
+df_wind <- data.frame(date = df_train$date[(2:168)],
+                        wind = df_train$Wind[(2:168)],
                         diff_wind = as.numeric(ts_wind_diff))
 
+
 #plot original, differenced, and differenced deseasonalized ts over time 
-ggplot(df_wind) +
-  geom_line(aes(x = date, y = `wind`, color = "Original Series")) +
-  geom_line(aes(x = date, y = `deseasonal_wind`, color = "Deseasonalized Series")) +
-  scale_color_manual(values = c("Original Series" = "grey", "Deseasonalized Series" = "#D55E00"))+
-  theme_light()+
-  theme(legend.position = "bottom") +
-  scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
-  labs(color="",
-       title = 'Monthly ERCOT Wind Generation',
-       y='Generation (1000s MWh)',
-       x='Year')
+#ggplot(df_wind) +
+ # geom_line(aes(x = date, y = `wind`, color = "Original Series")) +
+  #geom_line(aes(x = date, y = `deseasonal_wind`, color = "Deseasonalized Series")) +
+  #scale_color_manual(values = c("Original Series" = "grey", "Deseasonalized Series" = "#D55E00"))+
+  #theme_light()+
+  #theme(legend.position = "bottom") +
+  #scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
+  #labs(color="",
+   #    title = 'Monthly ERCOT Wind Generation',
+    #   y='Generation (1000s MWh)',
+     #  x='Year')
 
 #ACF & PACF
-par(mfrow=c(1,2))
-Acf(deseasonal_wind,lag.max=40, plot=TRUE, main = "ACF Deseasonalized Wind Generation")
-Pacf(deseasonal_wind,lag.max=40, plot=TRUE, main = "PACF Deseasonalized Wind Generation")
-par(mfrow=c(1,1))
+#par(mfrow=c(1,2))
+#Acf(deseasonal_wind,lag.max=40, plot=TRUE, main = "ACF Deseasonalized Wind Generation")
+#Pacf(deseasonal_wind,lag.max=40, plot=TRUE, main = "PACF Deseasonalized Wind Generation")
+#par(mfrow=c(1,1))
 
 #plot original, differenced, and differenced deseasonalized ts over time 
-ggplot(df_wind) +
-  geom_line(aes(x = date, y = `wind`, color = "Original Series")) +
-  geom_line(aes(x = date, y = `wind_diff`, color = "Differenced Series")) +
-  geom_line(aes(x = date, y = `wind_diff_deseas`, color = "Differenced Deseasonalized Series")) +
-  scale_color_manual(values = c("Original Series" = "grey39", "Differenced Series" = "#E69F00", 
-                                "Differenced Deseasonalized Series" = "#0072B2"))+
-  theme_light()+
-  theme(legend.position = "bottom") +
-  scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
-  labs(color="",
-       title = 'Monthly ERCOT Wind Generation',
-       y='Generation (1000s MWh)',
-       x='Year')
+#ggplot(df_wind) +
+ # geom_line(aes(x = date, y = `wind`, color = "Original Series")) +
+  #geom_line(aes(x = date, y = `wind_diff`, color = "Differenced Series")) +
+  #geom_line(aes(x = date, y = `wind_diff_deseas`, color = "Differenced Deseasonalized Series")) +
+  #scale_color_manual(values = c("Original Series" = "grey39", "Differenced Series" = "#E69F00", 
+  #                              "Differenced Deseasonalized Series" = "#0072B2"))+
+  #theme_light()+
+  #theme(legend.position = "bottom") +
+  #scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
+  #labs(color="",
+  #     title = 'Monthly ERCOT Wind Generation',
+   #    y='Generation (1000s MWh)',
+    #   x='Year')
 
 
 #ACF & PACF for differenced WIND
-par(mfrow=c(1,2))
-Acf(ts_wind_diff,lag.max=40, plot=TRUE, main = "ACF Differenced Wind Generation")
-Pacf(ts_wind_diff,lag.max=40, plot=TRUE, main = "PACF Differenced Wind Generation")
-par(mfrow=c(1,1))
+#par(mfrow=c(1,2))
+#Acf(ts_wind_diff,lag.max=40, plot=TRUE, main = "ACF Differenced Wind Generation")
+#Pacf(ts_wind_diff,lag.max=40, plot=TRUE, main = "PACF Differenced Wind Generation")
+#par(mfrow=c(1,1))
 
 #ACF & PACF for differenced deseasonalized WIND
-par(mfrow=c(1,2))
-Acf(diff_deseas_wind,lag.max=40, plot=TRUE, main = "ACF Differenced Deseasonalized Wind Generation")
-Pacf(diff_deseas_wind,lag.max=40, plot=TRUE, main = "PACF Differenced Deseasonalized Wind Generation")
-par(mfrow=c(1,1))
+#par(mfrow=c(1,2))
+#Acf(diff_deseas_wind,lag.max=40, plot=TRUE, main = "ACF Differenced Deseasonalized Wind Generation")
+#Pacf(diff_deseas_wind,lag.max=40, plot=TRUE, main = "PACF Differenced Deseasonalized Wind Generation")
+#par(mfrow=c(1,1))
 
 #Model 1: differenced deseasonalized wind ARIMA
-diff_deseas_wind_arima <- auto.arima(diff_deseas_wind, max.D=0,max.P = 0,max.Q=0)
-print(diff_deseas_wind_arima)
+#diff_deseas_wind_arima <- auto.arima(diff_deseas_wind, max.D=0,max.P = 0,max.Q=0)
+#print(diff_deseas_wind_arima)
 #forecast
-diff_deseas_wind_arima_forecast <- forecast(object = diff_deseas_wind_arima, h = 12)
-plot(diff_deseas_wind_arima_forecast)
+#diff_deseas_wind_arima_forecast <- forecast(object = diff_deseas_wind_arima, h = 12)
+#plot(diff_deseas_wind_arima_forecast)
 
 #Model 2: SARIMA on differenced 
-diff_wind_sarima <- auto.arima(ts_wind_diff)
-print(diff_wind_sarima)
+#diff_wind_sarima <- auto.arima(ts_wind_diff)
+#print(diff_wind_sarima)
 #forecast
-diff_wind_sarima_forecast <- forecast(object = diff_wind_sarima, h = 12)
-plot(diff_wind_sarima_forecast)
+#diff_wind_sarima_forecast <- forecast(object = diff_wind_sarima, h = 12)
+#plot(diff_wind_sarima_forecast)
 
 #Model 3: simple exponential smoothing on differenced wind data
-diff_wind_ses_forecast=ses(y = ts_wind_diff, h = 12, holdout = FALSE, silent = FALSE)  
-checkresiduals(diff_wind_ses_forecast)
-plot(diff_coal_ses_forecast, type="l")
+#diff_wind_ses_forecast=ses(y = ts_wind_diff, h = 12, holdout = FALSE, silent = FALSE)  
+#checkresiduals(diff_wind_ses_forecast)
+#plot(diff_coal_ses_forecast, type="l")
+
 
 ```
 
-##Wind Forecasting 
+#### Wind Forecasting 
 
 The SES model in general performs best for wind as shown in the table of accuracy scores. This aligns with the report of residuals, which shows few significant lags in the ACF and normal distribution in the histogram. 
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 #Model 1: SARIMA
 wind_sarima_autofit <- auto.arima(ts_train[,5])
 print(wind_sarima_autofit)
@@ -751,17 +761,19 @@ plot(wind_sarima_forecast)
 
 #Model 2: Seasonal SES
 wind_sses <- es(ts_train[,5], model="ZZZ", h= 12, holdout=FALSE, silent=F)
-plot(wind_sses)
-checkresiduals(wind_sses)
+#plot(wind_sses)
+checkresiduals(wind_sses, plot=TRUE)
+wind_sses_forecast<-forecast(wind_sses, h=12, start=c(2008,1))
+plot(wind_sses_forecast)
 
 #Model 3: SS with StructTS()
 wind_ss_model <- StructTS(ts_train[,5], type="BSM",fixed=c(NA,NA,NA,NA)) 
-checkresiduals(wind_ss_model)
+#checkresiduals(wind_ss_model)
 wind_ss_forecast<- forecast(wind_ss_model, h=12)
 plot(wind_ss_forecast)
 ```
 
-##Scores for Wind Forecasts 
+#### Scores for Wind Forecasts 
 We calculated the accuracy scores for each model to determine the best model fit.
 
 ```{r}

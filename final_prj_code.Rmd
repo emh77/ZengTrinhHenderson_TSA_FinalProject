@@ -39,7 +39,7 @@ update.packages(old.packages, ask = FALSE)
 ```
 
 ## Set up
-```{r message=FALSE}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #Load libraries 
 library(readxl)
 library(tidyverse)
@@ -52,7 +52,7 @@ library(smooth)
 ```
 
 ##Import and process data 
-```{r}
+```{r include=FALSE}
 #import dataset 
 data_import<- read_excel(path="./ERCOT_annual_generation_data.xlsx",
                 sheet="Generation Data",col_names=TRUE)
@@ -171,7 +171,7 @@ Nuclear: The ACF and PACF of Nuclear demonstrate characteristics of a non-season
 Wind: Wind, like hydro, shows less dramatic seasonality in its ACF but clear autoregressive characteristics with slow decay in the ACF and a sudden drop-off after lag one in the PACF.
 
 
-```{r}
+```{r include=FALSE}
 
 #create time series object (excludes 2022)
 ts_train<- ts(df_train[,(2:6)], frequency = 12, start = c(2008,1))
@@ -238,7 +238,10 @@ df_coal <- data.frame(date = df_train$date[(2:168)],
                         coal = df_train$Coal[(2:168)],
                         coal_deseas = as.numeric(deseasonal_coal[(2:168)]), 
                         coal_deseas_diff = as.numeric(coal_deseas_diff))
+```
 
+
+```{r}
 #plot original, differenced, and differenced deseasonalized ts over time 
 ggplot(df_coal) +
   geom_line(aes(x = date, y = `coal`, color = "Original Series")) +
@@ -253,7 +256,10 @@ ggplot(df_coal) +
        title = 'Monthly ERCOT Goal Generation',
        y='Generation (1000s MWh)',
        x='Year')
+```
 
+
+```{r include=FALSE}
 #Model 0: deseasonalized differenced coal ARIMA 
 des_diff_coal_arima <- auto.arima(coal_deseas_diff, max.D=0,max.P = 0,max.Q=0)
 print(des_diff_coal_arima)
@@ -505,8 +511,9 @@ rm(hydro1_scores, hydro2_scores, hydro3_scores)
 print(hydro_scores)
 ```
 
-```{r include=FALSE}
 ##Nuclear
+
+```{r include=FALSE}
 #Seasonal Mann-Kendall
 SMK_nuclear <- SeasonalMannKendall(ts_train[,4])
 print("Results for Seasonal Mann Kendall")
@@ -602,8 +609,8 @@ rm(nuclear1_scores, nuclear2_scores, nuclear3_scores)
 print(nuclear_scores)
 ```
 
-```{r include=FALSE}
 ##Wind
+```{r include=FALSE}
 #decompose wind data
 decompose_wind<- decompose(ts_train[,5], type = "additive")
 plot(decompose_wind) 
@@ -644,7 +651,10 @@ df_wind <- data.frame(date = df_train$date[(2:168)],
 df_wind <- data.frame(date = df_train$date,
                         wind = df_train$Wind,
                         diff_wind = as.numeric(ts_wind_diff))
+```
 
+
+```{r}
 #plot original, differenced, and differenced deseasonalized ts over time 
 ggplot(df_wind) +
   geom_line(aes(x = date, y = `wind`, color = "Original Series")) +

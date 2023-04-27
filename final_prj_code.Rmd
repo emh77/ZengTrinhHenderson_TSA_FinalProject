@@ -25,11 +25,13 @@ A interconnection queue dataset was also included in this study as an optional e
 
 #### Dataset Information
 
-All data for this analysis were collected from ERCOT's website. The primary data used detail historical monthly generation by fuel type. Annual excel reports were pulled for the years 2008 to 2022 and aggregated into a single excel document. This document maintained the same formatting structure of the original reports with a column for fuel type and each month (a total of 13). One additional column was added to indicate year.
+All data for this analysis were collected from ERCOT's website. The primary data used detail historical monthly generation by fuel type. Annual excel reports were pulled for the years 2008 to 2022 and aggregated into a single excel document. This document maintained the same formatting structure of the original reports with a column for fuel type and each month (a total of 13). One additional column was added to indicate year. 
 
-The aggregated excel document was loaded into R for further processing. After importing the data as a new dataframe, it was organized by date according to fuel type. This involved wrangling the data with a pivot_wider function to create a date field with year and month and then transposing the data. After converting the date field to a date values, the data was then further cleaned by aggregating columns of the same fuel type that originally used different naming conventions. For wind this meant combining "wind" and "wnd" columns a a similar process occurred for "other". Starting in 2012, ERCOT began reporting both "Gas" and "Gas-CC" generation values so those were also combined. Next the production values were converted to numeric and then from GWh to MWh. Finally, the dataframe was was converted into a time series with monthly frequency (12) and start date of January 2008 (and an end date of December 2021) for training purposes. The 2022 year was converted into a separate time series with monthly frequency (12) to use for testing forecasts. Solar data was left out as ERCOT only began documenting it separately in 2012.
+The aggregated excel document was loaded into R for further processing. To import and wrangle the data, we used the packages readxl, tidyverse, and lubridate. After importing the data as a new dataframe, it was organized by date according to fuel type. This involved wrangling the data with a pivot_wider function to create a date field with year and month and then transposing the data. After converting the date field to a date values, the data was then further cleaned by aggregating columns of the same fuel type that originally used different naming conventions. For wind this meant combining "wind" and "wnd" columns a a similar process occurred for "other". Starting in 2012, ERCOT began reporting both "Gas" and "Gas-CC" generation values so those were also combined. Next the production values were converted to numeric and then from GWh to MWh. Finally, the dataframe was was converted into a time series with monthly frequency (12) and start date of January 2008 (and an end date of December 2021) for training purposes. The 2022 year was converted into a separate time series with monthly frequency (12) to use for testing forecasts. Solar data was left out as ERCOT only began documenting it separately in 2012.
 
 The second sheet of the aggregated excel file included a summary of February 2023 queue data. This sheet was organized with a row for each fuel type and columns for "Not Started", "In Progress", and "Complete" Feasibility studies. Values reflect MW capacity for each.
+
+ 
 
 ```{r include=FALSE}
 #Needed for some of packages to load properly on Eliza's RStudio container, uncomment as needed
@@ -113,7 +115,7 @@ df_test<- df %>% filter(year(date) == 2022)
 
 #### Dataset summary 
 
-A summary of the final data is broken down below. This table details the minimum, maximum, and average generation by source as well as the first 10 months of data.
+A summary of the final data is broken down below. This table details the minimum, maximum, and average generation by source as well as the first 10 months of data. We used the function kable from the kableExtra package to generate this table.
 
 ```{r echo=FALSE}
 summary<- data.frame(matrix(nrow=0, ncol=5))
@@ -161,7 +163,7 @@ ggplot(df_train) +
 
 #### Create TS objects and visualize ACF and PACF
 
-The training data df was then converted to a time series for initial ACF and PACF analysis. The descriptions below summarize results captured in the plots for each source's time series, ACF, and PACF that follow.
+We used the package Kendall, tseries, forecast, and smooth for our models and analysis. We created time-series objects for each fuel type. We then ran a Seasonal Mann-Kendall test from the package Kendall. The training data df was then converted to a time series for initial ACF and PACF analysis. The descriptions below summarize results captured in the plots for each source's time series, ACF, and PACF that follow.
 
 **Coal:** The ACF and PACF for coal show characteristics of a seasonal auto-regressive model. The ACF has significant peaks at lag 12, 24, and 36 while the PACF showed a more sudden cut-off.
 
@@ -195,7 +197,7 @@ for(i in 1:5){
 
 #### Modeling Seasonality and Forecasting Generation
 
-This report captures results for Seasonal ARIMA, Seasonal Exponential Smoothing, and Seasonal State Space models. Analysis of model performance is broken down by generation source below.
+This report captures results for Seasonal ARIMA, Seasonal Exponential Smoothing, and Seasonal State Space models from the forecast library package. Analysis of model performance is broken down by generation source below.
 
 Initial modeling activity also included decomposing the time series for each generation source in order to apply a wider range of models. After deseasoning and differencing the data, the new time series were plotted along with their respective ACF and PACF. These differenced series were then modeled with auto.arima and forecasted accordingly. However, the final set of forecasting models reported here does not use these differenced time series. They instead rely only on the aforementioned models that incorporate seasonality and trend in order to maintain a more apples-to-apples comparison of model performance.
 
@@ -878,7 +880,7 @@ print(wind_scores)
 ```
 
 #### Forecasting 2023 ERCOT generation using the best models 
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 #best models: Coal: BSM, Gas: BSM, Hydro: SES , Nuclear: SARIMA, Wind: SES
 
 #forecast into the future, training data on full dataset now, df

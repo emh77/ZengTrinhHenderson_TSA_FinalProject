@@ -7,7 +7,7 @@ output:
   pdf_document: default
 geometry: margin=2.54cm
 editor_options:
-  chunk_output_type: inline
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -27,7 +27,7 @@ A interconnection queue dataset was also included in this study as an optional e
 
 All data for this analysis were collected from ERCOT's website. The primary data used detail historical monthly generation by fuel type. Annual excel reports were pulled for the years 2008 to 2022 and aggregated into a single excel document. This document maintained the same formatting structure of the original reports with a column for fuel type and each month (a total of 13). One additional column was added to indicate year.
 
-The aggregated excel document was loaded into R for further processing. After importing the data as a new dataframe, it was organized by date according to fuel type. This involved wrangling the data with a pivot_wider function to create a date field with year and month and then transposing the data. After converting the date field to a date values, the data was then further cleaned by aggregating columns of the same fuel type that originally used different naming conventions. For wind this meant combining "wind" and "wnd" columns a a similar process occurred for "other". Starting in 2012, ERCOT began reporting both "Gas" and "Gas-CC" generation values so those were also combined. Next the production values were converted to numeric and then from GWh to MWh. Lastly 2022 data were filtered out of the dataframe and it was converted into a time series with monthly frequency (12) and start date of January 2008. Solar data was left out as ERCOT only began documenting it separately in 2012.
+The aggregated excel document was loaded into R for further processing. After importing the data as a new dataframe, it was organized by date according to fuel type. This involved wrangling the data with a pivot_wider function to create a date field with year and month and then transposing the data. After converting the date field to a date values, the data was then further cleaned by aggregating columns of the same fuel type that originally used different naming conventions. For wind this meant combining "wind" and "wnd" columns a a similar process occurred for "other". Starting in 2012, ERCOT began reporting both "Gas" and "Gas-CC" generation values so those were also combined. Next the production values were converted to numeric and then from GWh to MWh. Finally, the dataframe was was converted into a time series with monthly frequency (12) and start date of January 2008 (and an end date of December 2021) for training purposes. The 2022 year was converted into a separate time series with monthly frequency (12) to use for testing forecasts. Solar data was left out as ERCOT only began documenting it separately in 2012.
 
 The second sheet of the aggregated excel file included a summary of February 2023 queue data. This sheet was organized with a row for each fuel type and columns for "Not Started", "In Progress", and "Complete" Feasibility studies. Values reflect MW capacity for each.
 
@@ -120,24 +120,26 @@ summary<- data.frame(matrix(nrow=0, ncol=5))
 min<- apply(df[2:ncol(df)], 2, min)
 max<- apply(df[2:ncol(df)], 2, max)
 mean<- apply(df[2:ncol(df)], 2, mean)
+median<- apply(df[2:ncol(df)], 2, median)
+sd<- apply(df[2:ncol(df)], 2, sd)
 #can add more summary rows 
 df_10<- df[1:10,2:6] #first ten rows of the data 
-summary<- rbind(summary, round(min,0), round(max,0), round(mean,0), round(df_10,0))
+summary<- rbind(summary, round(min,0), round(max,0), round(mean,0), round(median,0), round(sd,0), round(df_10,0))
 
 colnames(summary)<- colnames(df)[2:length(colnames(df))]
-Description<- c("min","max","mean",as.character(df[1:10,1]))
+Description<- c("min","max","mean","median","standard deviation",as.character(df[1:10,1]))
 summary<- cbind(Description, summary)
 
 kable(summary, 
-      caption = "ERCOT Generation (in 1000s MWh)") %>%
+      caption = "ERCOT Generation (in 1000s MWh), 2008 - 2022") %>%
   kable_styling(full_width = FALSE, position = "center") %>%
-  pack_rows(index = c("Summary of Data" = 3, "Data" = 10))
+  pack_rows(index = c("Summary of Data" = 5, "Data" = 10))
 ```
 
 
 #### Visualizing the data 
 
-The figure below shows all monthly generation input data by data source using the training data (Year 2008 through 2022). It highlights the upward trend of Wind and Gas generation, stable Hydro and Nuclear production, and the downward trend of Coal. Wind, Gas, and Coal all appear to show annual cycles. Gas and Coal show clear summer peaks with a smaller peak in the winter.
+The figure below shows all monthly generation input data by data source using the training data (Year 2008 through 2021). It highlights the upward trend of Wind and Gas generation, stable Hydro and Nuclear production, and the downward trend of Coal. Wind, Gas, and Coal all appear to show annual cycles. Gas and Coal show clear summer peaks with a smaller peak in the winter.
 
 ```{r}
 ggplot(df_train) +
@@ -238,13 +240,13 @@ Pacf(coal_deseas_diff,lag.max=40, plot=TRUE, main = "PACF Differenced Decomposed
 par(mfrow=c(1,1))
 
 #create df with deseasonalized  and deseasonalized differenced coal
-df_coal <- data.frame(date = df_train$date[(2:168)],
+df_coal_1 <- data.frame(date = df_train$date[(2:168)],
                         coal = df_train$Coal[(2:168)],
                         coal_deseas = as.numeric(deseasonal_coal[(2:168)]), 
                         coal_deseas_diff = as.numeric(coal_deseas_diff))
 
 #plot original, differenced, and differenced deseasonalized ts over time 
-ggplot(df_coal) +
+ggplot(df_coal_1) +
   geom_line(aes(x = date, y = `coal`, color = "Original Series")) +
   geom_line(aes(x = date, y = `coal_deseas`, color = "Deseasonalized Series")) +
   geom_line(aes(x = date, y = `coal_deseas_diff`, color = "Deseasonalized Differenced Series")) +
@@ -254,48 +256,54 @@ ggplot(df_coal) +
   theme(legend.position = "bottom") +
   scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
   labs(color="",
-       title = 'Monthly ERCOT Goal Generation',
+       title = 'Monthly ERCOT Coal Generation',
        y='Generation (1000s MWh)',
        x='Year')
-
-#Model 0: deseasonalized differenced coal ARIMA 
-des_diff_coal_arima <- auto.arima(coal_deseas_diff, max.D=0,max.P = 0,max.Q=0)
-print(des_diff_coal_arima)
-#forecast
-des_diff_coal_arima_forecast <- forecast(object = des_diff_coal_arima, h = 12)
-plot(des_diff_coal_arima_forecast)
-
-#Model 0: forecast with simple exponential smoothing on differenced coal data
-#diff_coal_ses_forecast=ses(y = ts_coal_diff, h = 12, holdout = FALSE, silent = FALSE)  
-#checkresiduals(diff_coal_ses_forecast)
-#plot(diff_coal_ses_forecast, type="l")
 ```
 
 #### Coal Forecasting 
 
-The State Space (StructTS) model performs best for coal as shown in the table of accuracy scores. Although these values are lowest for StructTS, the ACF of residuals suggests the Exponential Smoothing model may better capture the trends as it has fewer significant lags and thus is truly random. 
-
+The State Space (StructTS) model performs best for coal as shown in the table of accuracy scores. 
+[residuals for SES is best but has the worst accuracy scores tied with SARIMA]
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 #Model 1: SARIMA
 coal_sarima_autofit <- auto.arima(ts_train[,1])
 print(coal_sarima_autofit)
-#forecast
 coal_sarima_forecast <- forecast(object = coal_sarima_autofit, h = 12)
-plot(coal_sarima_forecast)
 
 #Model 2: Seasonal SES
 coal_sses <- es(ts_train[,1], model="ZZZ", h= 12, holdout=FALSE, silent=F)
-#plot(coal_sses)
-#checkresiduals(coal_sses)
-#forecast
-coal_sses_forecast<-forecast(coal_sses, h=12, start=c(2008,1))
-plot(coal_sses_forecast)
+coal_sses_forecast<-forecast(coal_sses, h=12, start=c(2008,1)) #@kristen, we do actually need to keep this 
 
 #Model 3: SS with StructTS()
 coal_ss_model <- StructTS(ts_train[,1], type="BSM",fixed=c(NA,NA,NA,NA)) 
-checkresiduals(coal_ss_model, plot=TRUE)
 coal_ss_forecast<- forecast(coal_ss_model, h=12)
-plot(coal_ss_forecast)
+
+checkresiduals(coal_sarima_autofit)
+checkresiduals(coal_sses)
+checkresiduals(coal_ss_model, plot=TRUE)
+
+#df with test data and forecasts 
+df_coal <- data.frame(date = df_test$date,
+                      test = df_test$Coal,
+                      sarima = coal_sarima_forecast$mean,
+                      sses = coal_sses_forecast$mean,
+                      bsm = coal_ss_forecast$mean)
+
+#plot all forecasts together against test 
+ggplot(df_coal) +
+  geom_line(aes(x = date, y = `test`, color = "Original Series")) +
+  geom_line(aes(x = date, y = `sarima`, color = "SARIMA")) +
+  geom_line(aes(x = date, y = `sses`, color = "SSES")) +
+  geom_line(aes(x = date, y = `bsm`, color = "BSM")) +
+  scale_color_manual(values = c("Original Series" = "black", "SARIMA" = "blue", "SSES" = "red", "BSM"="green"))+
+  theme(legend.position = "right") +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
+  labs(color="",
+       y='Coal Generation (1000s MWh)',
+       x='Year')
+
+#ADD CAPTION DESCRIBING THAT THIS IS A FORECAST
 ```
 
 #### Accuracy Scores for Coal Forecasts 
@@ -311,8 +319,9 @@ coal3_scores <- accuracy(coal_ss_forecast, ts_test[,1], test=NULL)
 coal3_scores<- coal3_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
 
 coal_scores <- as.data.frame(rbind(coal1_scores[2,], coal2_scores, coal3_scores[2,]))
-coal_score_names<- c("sarima","SSES","BSM")
-coal_scores<- cbind(coal_score_names, coal_scores)
+coal_forecasts<- c("SARIMA","SSES","BSM")
+coal_scores<- cbind(coal_forecasts, coal_scores)
+rownames(coal_scores)<- c(1:3)
 rm(coal1_scores, coal2_scores, coal3_scores)
 print(coal_scores)
 ```
@@ -380,28 +389,47 @@ par(mfrow=c(1,1))
 
 #### Gas Forecasting
 
-The State Space (StructTS) model performs best for gas as shown in the table of accuracy scores. However, the ACF of residuals of the Exponential Smoothing model once again suggests it better captures trends. It shows no significant lags whereas the StructTS model shows many, thus capturing more than a random component. The SARIMA model outperforms the SES model on some accuracy parameters. 
+The BSM State Space (StructTS) model performs best for gas as shown in the table of accuracy scores. However, the ACF of residuals of the Exponential Smoothing model shows no significant lags, which once again suggests it better captures trends. The ES model also shows more white noise in its residuals and is more normally distributed. 
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 #Model 1: SARIMA
 gas_sarima_autofit <- auto.arima(ts_train[,2])
 print(gas_sarima_autofit)
-#forecast
 gas_sarima_forecast <- forecast(object = gas_sarima_autofit, h = 12)
-plot(gas_sarima_forecast)
 
 #Model 2: Seasonal SES
 gas_sses <- es(ts_train[,2], model="ZZZ", h= 12, holdout=FALSE, silent=F)
-#plot(gas_sses)
-#checkresiduals(gas_sses)
 gas_sses_forecast<-forecast(gas_sses, h=12, start=c(2008,1))
-plot(gas_sses_forecast)
 
 #Model 3: SS with StructTS()
 gas_ss_model <- StructTS(ts_train[,2], type="BSM",fixed=c(NA,NA,NA,NA)) 
-checkresiduals(gas_ss_model, plot=TRUE)
 gas_ss_forecast<- forecast(gas_ss_model, h=12)
-plot(gas_ss_forecast)
+
+checkresiduals(gas_sarima_autofit)
+checkresiduals(gas_sses)
+checkresiduals(gas_ss_model, plot=TRUE)
+
+#df with test data and forecasts 
+df_gas <- data.frame(date = df_test$date,
+                      test = df_test$Gas,
+                      sarima = gas_sarima_forecast$mean,
+                      sses = gas_sses_forecast$mean,
+                      bsm = gas_ss_forecast$mean)
+
+#plot all forecasts together against test 
+ggplot(df_gas) +
+  geom_line(aes(x = date, y = `test`, color = "Original Series")) +
+  geom_line(aes(x = date, y = `sarima`, color = "SARIMA")) +
+  geom_line(aes(x = date, y = `sses`, color = "SSES")) +
+  geom_line(aes(x = date, y = `bsm`, color = "BSM")) +
+  scale_color_manual(values = c("Original Series" = "black", "SARIMA" = "blue", "SSES" = "red", "BSM"="green"))+
+  theme(legend.position = "right") +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
+  labs(color="",
+       y='Gas Generation (1000s MWh)',
+       x='Year')
+
+#ADD CAPTION
 ```
 
 #### Scores for Gas Forecasts 
@@ -418,8 +446,9 @@ gas3_scores<- gas3_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
 
 
 gas_scores <- as.data.frame(rbind(gas1_scores[2,], gas2_scores, gas3_scores[2,]))
-gas_score_names<- c("sarima","SSES","BSM")
-gas_scores<- cbind(gas_score_names, gas_scores)
+gas_forecasts<- c("SARIMA","SSES","BSM")
+gas_scores<- cbind(gas_forecasts, gas_scores)
+rownames(gas_scores)<- c(1:3)
 rm(gas1_scores, gas2_scores, gas3_scores)
 print(gas_scores)
 ```
@@ -485,28 +514,46 @@ plot(des_hydro_arima_forecast)
 
 #### Hydro Forecasting
 
-The SES model in general performs best for hydro as shown in the table of accuracy scores. Although these values are lowest for SES, the histogram of residuals suggests the StructTS model may better capture the trends as it has a more normal distribution instead of a right tail. 
-
+The SES model in general performs best for hydro as shown in the table of accuracy scores. 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 #Model 1: SARIMA
 hydro_sarima_autofit <- auto.arima(ts_train[,3])
 print(hydro_sarima_autofit)
-#forecast
 hydro_sarima_forecast <- forecast(object = hydro_sarima_autofit, h = 12)
-plot(hydro_sarima_forecast)
 
 #Model 2: Seasonal SES
 hydro_sses <- es(ts_train[,3], model="ZZZ", h= 12, holdout=FALSE, silent=F)
-#plot(hydro_sses)
-checkresiduals(hydro_sses, plot=TRUE)
 hydro_sses_forecast<-forecast(hydro_sses, h=12, start=c(2008,1))
-plot(hydro_sses_forecast)
 
 #Model 3: SS with StructTS()
 hydro_ss_model <- StructTS(ts_train[,3], type="BSM",fixed=c(NA,NA,NA,NA)) 
-#checkresiduals(hydro_ss_model)
 hydro_ss_forecast<- forecast(hydro_ss_model, h=12)
-plot(hydro_ss_forecast)
+
+checkresiduals(hydro_sarima_autofit)
+checkresiduals(hydro_sses, plot=TRUE)
+checkresiduals(hydro_ss_model)
+
+#df with test data and forecasts 
+df_hydro <- data.frame(date = df_test$date,
+                      test = df_test$Hydro,
+                      sarima = hydro_sarima_forecast$mean,
+                      sses = hydro_sses_forecast$mean,
+                      bsm = hydro_ss_forecast$mean)
+
+#plot all forecasts together against test 
+ggplot(df_hydro) +
+  geom_line(aes(x = date, y = `test`, color = "Original Series")) +
+  geom_line(aes(x = date, y = `sarima`, color = "SARIMA")) +
+  geom_line(aes(x = date, y = `sses`, color = "SSES")) +
+  geom_line(aes(x = date, y = `bsm`, color = "BSM")) +
+  scale_color_manual(values = c("Original Series" = "black", "SARIMA" = "blue", "SSES" = "red", "BSM"="green"))+
+  theme(legend.position = "right") +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
+  labs(color="",
+       y='Hydro Generation (1000s MWh)',
+       x='Year')
+
+#ADD CAPTION
 ```
 
 #### Scores for Hydro Forecasts 
@@ -522,8 +569,9 @@ hydro3_scores <- accuracy(hydro_ss_forecast, ts_test[,3], test=NULL)
 hydro3_scores<- hydro3_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
 
 hydro_scores <- as.data.frame(rbind(hydro1_scores[2,], hydro2_scores, hydro3_scores[2,]))
-hydro_score_names<- c("sarima","SSES","BSM")
-hydro_scores<- cbind(hydro_score_names, hydro_scores)
+hydro_forecasts<- c("sarima","SSES","BSM")
+hydro_scores<- cbind(hydro_forecasts, hydro_scores)
+rownames(hydro_scores)<- c(1:3)
 rm(hydro1_scores, hydro2_scores, hydro3_scores)
 print(hydro_scores)
 ```
@@ -588,29 +636,47 @@ plot(des_nuclear_arima_forecast)
 
 #### Nuclear Forecasting 
 
-The SARIMA model performs best for nuclear as shown in the table of accuracy scores. The residuals for SES and StructTS show a similar number of significant ACF lags and distorted (ie not distinctly normal) histograms suggesting the forecasted models do not capture all of the trends.  
+The SARIMA model performs best for nuclear as shown in the table of accuracy scores. The residuals for all models show a similar number of significant ACF lags and distorted (ie not distinctly normal) histograms suggesting the forecasted models do not capture all of the trends.  
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 #Model 1: SARIMA
 nuclear_sarima_autofit <- auto.arima(ts_train[,4])
 print(nuclear_sarima_autofit)
-checkresiduals(nuclear_sarima_autofit, plot=TRUE)
-#forecast
 nuclear_sarima_forecast <- forecast(object = nuclear_sarima_autofit, h = 12)
-plot(nuclear_sarima_forecast)
 
 #Model 2: Seasonal SES
 nuclear_sses <- es(ts_train[,4], model="ZZZ", h= 12, holdout=FALSE, silent=F)
-#plot(nuclear_sses)
-#checkresiduals(nuclear_sses)
 nuclear_sses_forecast<-forecast(nuclear_sses, h=12, start=c(2008,1))
-plot(nuclear_sses_forecast)
 
 #Model 3: SS with StructTS()
 nuclear_ss_model <- StructTS(ts_train[,4], type="BSM",fixed=c(NA,NA,NA,NA)) 
-#checkresiduals(nuclear_ss_model)
 nuclear_ss_forecast<- forecast(nuclear_ss_model, h=12)
-plot(nuclear_ss_forecast)
+
+checkresiduals(nuclear_sarima_autofit)
+checkresiduals(nuclear_sses)
+checkresiduals(nuclear_ss_model)
+
+#df with test data and forecasts 
+df_nuclear <- data.frame(date = df_test$date,
+                      test = df_test$Nuclear,
+                      sarima = nuclear_sarima_forecast$mean,
+                      sses = nuclear_sses_forecast$mean,
+                      bsm = nuclear_ss_forecast$mean)
+
+#plot all forecasts together against test 
+ggplot(df_nuclear) +
+  geom_line(aes(x = date, y = `test`, color = "Original Series")) +
+  geom_line(aes(x = date, y = `sarima`, color = "SARIMA")) +
+  geom_line(aes(x = date, y = `sses`, color = "SSES")) +
+  geom_line(aes(x = date, y = `bsm`, color = "BSM")) +
+  scale_color_manual(values = c("Original Series" = "black", "SARIMA" = "blue", "SSES" = "red", "BSM"="green"))+
+  theme(legend.position = "right") +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
+  labs(color="",
+       y='Nuclear Generation (1000s MWh)',
+       x='Year')
+
+#ADD CAPTION
 ```
 
 #### Scores for Nuclear Forecasts 
@@ -626,8 +692,9 @@ nuclear3_scores <- accuracy(nuclear_ss_forecast, ts_test[,4], test=NULL)
 nuclear3_scores<- nuclear3_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
 
 nuclear_scores <- as.data.frame(rbind(nuclear1_scores[2,], nuclear2_scores, nuclear3_scores[2,]))
-nuclear_score_names<- c("sarima","SSES","BSM")
-nuclear_scores<- cbind(nuclear_score_names, nuclear_scores)
+nuclear_forecasts<- c("sarima","SSES","BSM")
+nuclear_scores<- cbind(nuclear_forecasts, nuclear_scores)
+rownames(nuclear_scores)<- c(1:3)
 rm(nuclear1_scores, nuclear2_scores, nuclear3_scores)
 print(nuclear_scores)
 ```
@@ -743,8 +810,6 @@ df_wind <- data.frame(date = df_train$date[(2:168)],
 #diff_wind_ses_forecast=ses(y = ts_wind_diff, h = 12, holdout = FALSE, silent = FALSE)  
 #checkresiduals(diff_wind_ses_forecast)
 #plot(diff_coal_ses_forecast, type="l")
-
-
 ```
 
 #### Wind Forecasting 
@@ -755,22 +820,41 @@ The SES model in general performs best for wind as shown in the table of accurac
 #Model 1: SARIMA
 wind_sarima_autofit <- auto.arima(ts_train[,5])
 print(wind_sarima_autofit)
-#forecast
 wind_sarima_forecast <- forecast(object = wind_sarima_autofit, h = 12)
-plot(wind_sarima_forecast)
 
 #Model 2: Seasonal SES
 wind_sses <- es(ts_train[,5], model="ZZZ", h= 12, holdout=FALSE, silent=F)
-#plot(wind_sses)
-checkresiduals(wind_sses, plot=TRUE)
 wind_sses_forecast<-forecast(wind_sses, h=12, start=c(2008,1))
-plot(wind_sses_forecast)
 
 #Model 3: SS with StructTS()
 wind_ss_model <- StructTS(ts_train[,5], type="BSM",fixed=c(NA,NA,NA,NA)) 
-#checkresiduals(wind_ss_model)
 wind_ss_forecast<- forecast(wind_ss_model, h=12)
-plot(wind_ss_forecast)
+
+checkresiduals(wind_sarima_autofit)
+checkresiduals(wind_sses, plot=TRUE)
+checkresiduals(wind_ss_model)
+
+#df with test data and forecasts 
+df_wind <- data.frame(date = df_test$date,
+                      test = df_test$Wind,
+                      sarima = wind_sarima_forecast$mean,
+                      sses = wind_sses_forecast$mean,
+                      bsm = wind_ss_forecast$mean)
+
+#plot all forecasts together against test 
+ggplot(df_wind) +
+  geom_line(aes(x = date, y = `test`, color = "Original Series")) +
+  geom_line(aes(x = date, y = `sarima`, color = "SARIMA")) +
+  geom_line(aes(x = date, y = `sses`, color = "SSES")) +
+  geom_line(aes(x = date, y = `bsm`, color = "BSM")) +
+  scale_color_manual(values = c("Original Series" = "black", "SARIMA" = "blue", "SSES" = "red", "BSM"="green"))+
+  theme(legend.position = "right") +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
+  labs(color="",
+       y='Wind Generation (1000s MWh)',
+       x='Year')
+
+#ADD CAPTION
 ```
 
 #### Scores for Wind Forecasts 
@@ -786,11 +870,80 @@ wind3_scores <- accuracy(wind_ss_forecast, ts_test[,5], test=NULL)
 wind3_scores<- wind3_scores[,c("ME","RMSE","MAE","MPE","MAPE")]
 
 wind_scores <- as.data.frame(rbind(wind1_scores[2,], wind2_scores, wind3_scores[2,]))
-wind_score_names<- c("sarima","SSES","BSM")
-wind_scores<- cbind(wind_score_names, wind_scores)
+wind_forecasts<- c("sarima","SSES","BSM")
+wind_scores<- cbind(wind_forecasts, wind_scores)
+rownames(wind_scores)<- c(1:3)
 rm(wind1_scores, wind2_scores, wind3_scores)
 print(wind_scores)
 ```
+
+#### Forecasting 2023 ERCOT generation using the best models 
+```{r}
+#best models: Coal: BSM, Gas: BSM, Hydro: SES , Nuclear: SARIMA, Wind: SES
+
+#forecast into the future, training data on full dataset now, df
+ts_fulldf<- ts(df[,(2:6)], frequency = 12, start = c(2008,1))
+
+#coal, BSM
+coal_2023 <- StructTS(ts_fulldf[,1], type="BSM",fixed=c(NA,NA,NA,NA)) 
+coal_2023_forecast<- forecast(coal_2023, h=12)
+
+#gas, BSM
+gas_2023 <- StructTS(ts_fulldf[,2], type="BSM",fixed=c(NA,NA,NA,NA)) 
+gas_2023_forecast<- forecast(gas_2023, h=12)
+
+#hydro, SES
+hydro_2023 <- es(ts_fulldf[,3], model="ZZZ", h= 12, holdout=FALSE, silent=F)
+hydro_2023_forecast<-forecast(hydro_2023, h=12, start=c(2008,1))
+
+#nuclear, SARIMA
+nuclear_2023 <- auto.arima(ts_fulldf[,4])
+print(nuclear_2023)
+nuclear_2023_forecast <- forecast(object = nuclear_2023, h = 12)
+
+#wind, SES 
+wind_2023 <- es(ts_fulldf[,5], model="ZZZ", h= 12, holdout=FALSE, silent=F)
+wind_2023_forecast<-forecast(wind_2023, h=12, start=c(2008,1))
+
+#df with all forecasts 
+df_2023_forecast <- data.frame(date = seq(as.Date("2023/01/01"), by = "month", length.out = 12),
+                      Coal_f = coal_2023_forecast$mean,
+                      Gas_f = gas_2023_forecast$mean,
+                      Hydro_f = hydro_2023_forecast$mean,
+                      Nuclear_f = nuclear_2023_forecast$mean,
+                      Wind_f = wind_2023_forecast$mean)
+
+#combine exisiting data with forecasts 
+forecasted_df<- full_join(df, df_2023_forecast)
+
+#PLOT
+ggplot(forecasted_df) +
+  geom_line(aes(x = date, y = `Coal`, color = "Coal")) +
+  geom_line(aes(x = date, y = `Coal_f`, color = "Forecasted Coal")) +
+  geom_line(aes(x = date, y = `Gas`, color = "Gas")) +
+  geom_line(aes(x = date, y = `Gas_f`, color = "Forecasted Gas")) +
+  geom_line(aes(x = date, y = `Hydro`, color = "Hydro")) +
+  geom_line(aes(x = date, y = `Hydro_f`, color = "Forecasted Hydro")) +
+  geom_line(aes(x = date, y = `Nuclear`, color = "Nuclear")) +
+  geom_line(aes(x = date, y = `Nuclear_f`, color = "Forecasted Nuclear")) +
+  geom_line(aes(x = date, y = `Wind`, color = "Wind")) +
+  geom_line(aes(x = date, y = `Wind_f`, color = "Forecasted Wind")) +
+  scale_color_manual(values = c("Coal" = "#D89367","Forecasted Coal" = "#D55E00", 
+                                "Gas" = "#7DBA9F" ,"Forecasted Gas" = "#009E73", 
+                                "Hydro"="#6F9BC4","Forecasted Hydro" = "#0072B2", 
+                                "Nuclear"="#F3EC91","Forecasted Nuclear"="#F0E442", 
+                                "Wind"="#D4A4C0","Forecasted Wind"="#CC79A7"))+
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
+  labs(color="",
+       title = 'ERCOT Monthly Generation and Forecasts',
+       y='Generation (1000 MWh)',
+       x='Year')+
+  theme_light()+
+  theme(legend.position = "right")
+
+#caption that the darker shades of each color are the forecasted ones 
+```
+
 
 #### Summary and Conclusions
 
@@ -802,5 +955,12 @@ The differences in which models suit which generation source also relate to the 
 #### References
 
 [1] Gearino, D. (2023, March 9). One state generates much, much more renewable energy than any other-and it's not California. Inside Climate News. Retrieved April 26, 2023, from https://insideclimatenews.org/news/09032023/inside-clean-energy-texas-renewables/#:~:text=No%2C%20it's%20not%20California.,thanks%20largely%20to%20wind%20energy 
+
+```{r}
+df_2023_forecast<- rbind(data.frame(date = df$date, Coal_f = NA, Gas_f = NA, Hydro_f = NA, Nuclear_f = NA, Wind_f = NA), df_2023_forecast)
+
+df<- rbind(df, data.frame(date = seq(as.Date("2023/01/01"), by = "month", length.out = 12), 
+           Coal = NA, Gas = NA, Hydro = NA, Nuclear = NA, Wind = NA))
+```
 
 

@@ -133,7 +133,7 @@ Description<- c("min","max","mean","median","standard deviation",as.character(df
 summary<- cbind(Description, summary)
 
 kable(summary, 
-      caption = "ERCOT Generation (in 1000s MWh), 2008 - 2022") %>%
+      caption = "Table 1. ERCOT Generation (in 1000s MWh), 2008 - 2022 and first ten rows of data.") %>%
   kable_styling(full_width = FALSE, position = "center") %>%
   pack_rows(index = c("Summary of Data" = 5, "Data" = 10))
 ```
@@ -154,12 +154,14 @@ ggplot(df_train) +
                                 "Hydro" = "#0072B2", "Nuclear"="#F0E442", "Wind"="#CC79A7"))+
   scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
   labs(color="",
-       title = 'Table 1. ERCOT Monthly Generation and the first ten rows of data',
+       title = 'ERCOT Monthly Generation',
        y='Generation (1000 MWh)',
        x='Year')+
   theme_light()+
   theme(legend.position = "bottom")
 ```
+
+  
 *Figure 1. ERCOT monthly generation by fuel type from 2008-2022*
 
 
@@ -283,6 +285,8 @@ coal_sarima_forecast <- forecast(object = coal_sarima_autofit, h = 12)
 coal_sses <- es(ts_train[,1], model="ZZZ", h= 12, holdout=FALSE, silent=F)
 coal_sses_forecast<-forecast(coal_sses, h=12, start=c(2008,1)) #@kristen, we do actually need to keep this
 ```
+
+  
 *Figure 2. Seasonal SES model for Coal.*
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
@@ -298,11 +302,15 @@ checkresiduals(coal_sarima_autofit)
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 checkresiduals(coal_sses)
 ```
+
+  
 *Figure 4. Residuals for the SSES model for Coal.*
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 checkresiduals(coal_ss_model, plot=TRUE)
 ```
+
+  
 *Figure 5. Residuals for the StructTS model for Coal.*
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
@@ -564,21 +572,41 @@ The SES model in general performs best for hydro as shown in the table of accura
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 #Model 1: SARIMA
 hydro_sarima_autofit <- auto.arima(ts_train[,3])
-print(hydro_sarima_autofit)
+#print(hydro_sarima_autofit)
 hydro_sarima_forecast <- forecast(object = hydro_sarima_autofit, h = 12)
 
 #Model 2: Seasonal SES
 hydro_sses <- es(ts_train[,3], model="ZZZ", h= 12, holdout=FALSE, silent=F)
 hydro_sses_forecast<-forecast(hydro_sses, h=12, start=c(2008,1))
+```
 
+*Figure 12. Seasonal SES model for hydro generation.*
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 #Model 3: SS with StructTS()
 hydro_ss_model <- StructTS(ts_train[,3], type="BSM",fixed=c(NA,NA,NA,NA)) 
 hydro_ss_forecast<- forecast(hydro_ss_model, h=12)
 
 checkresiduals(hydro_sarima_autofit)
-checkresiduals(hydro_sses, plot=TRUE)
-checkresiduals(hydro_ss_model)
+```
 
+*Figure 13. Residuals for SARIMA model for hydro generation.*
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+checkresiduals(hydro_sses, plot=TRUE)
+```
+
+
+*Figure 14. Residuals for SSES model for hydro generation.*
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+checkresiduals(hydro_ss_model)
+```
+
+
+*Figure 15. Residuals for StructTS model for hydro generation.*
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 #df with test data and forecasts 
 df_hydro <- data.frame(date = df_test$date,
                       test = df_test$Hydro,
@@ -602,9 +630,14 @@ ggplot(df_hydro) +
 #ADD CAPTION
 ```
 
+
+*Figure 16. 2022 hydro generation forecast for each model; the original 2022 data is in black.*
+
 #### Scores for Hydro Forecasts 
 We calculated the accuracy scores to confirm which model generated the best forecast for hydro.
 
+
+*Table 4. Accuracy scores for models for Hydro generation.*
 ```{r}
 #test the accuracy of the models 
 hydro1_scores <- accuracy(hydro_sarima_forecast, ts_test[,3], test=NULL)

@@ -925,21 +925,44 @@ The SES model in general performs best for wind as shown in the table of accurac
 ```{r message=FALSE, warning=FALSE}
 #Model 1: SARIMA
 wind_sarima_autofit <- auto.arima(ts_train[,5])
-print(wind_sarima_autofit)
+#print(wind_sarima_autofit)
 wind_sarima_forecast <- forecast(object = wind_sarima_autofit, h = 12)
 
 #Model 2: Seasonal SES
 wind_sses <- es(ts_train[,5], model="ZZZ", h= 12, holdout=FALSE, silent=F)
 wind_sses_forecast<-forecast(wind_sses, h=12, start=c(2008,1))
+```
 
+
+*Figure 22. Seasonal SES model for wind generation.*
+
+
+```{r message=FALSE, warning=FALSE}
 #Model 3: SS with StructTS()
 wind_ss_model <- StructTS(ts_train[,5], type="BSM",fixed=c(NA,NA,NA,NA)) 
 wind_ss_forecast<- forecast(wind_ss_model, h=12)
 
-checkresiduals(wind_sarima_autofit)
-checkresiduals(wind_sses, plot=TRUE)
-checkresiduals(wind_ss_model)
+checkresiduals(wind_sarima_autofit, plot=TRUE)
+```
 
+
+*Figure 23. Residuals for SARIMA model for wind generation.*
+
+```{r message=FALSE, warning=FALSE}
+checkresiduals(wind_sses, plot=TRUE)
+```
+
+
+*Figure 24. Residuals for SSES model for wind generation.*
+
+```{r message=FALSE, warning=FALSE}
+checkresiduals(wind_ss_model, plot=TRUE)
+```
+
+
+*Figure 25. Residuals for StructTS model for wind generation.*
+
+```{r message=FALSE, warning=FALSE}
 #df with test data and forecasts 
 df_wind <- data.frame(date = df_test$date,
                       test = df_test$Wind,
@@ -963,9 +986,13 @@ ggplot(df_wind) +
 #ADD CAPTION
 ```
 
+*Figure 26. 2022 wind generation forecast for each model; the original 2022 data is in black.*
+
 #### Scores for Wind Forecasts 
 We calculated the accuracy scores for each model to determine the best model fit.
 
+
+*Table 6. Accuracy scores for models for Wind generation.*
 ```{r}
 #test the accuracy of the models 
 wind1_scores <- accuracy(wind_sarima_forecast, ts_test[,5], test=NULL)
@@ -1001,16 +1028,28 @@ gas_2023_forecast<- forecast(gas_2023, h=12)
 #hydro, SES
 hydro_2023 <- es(ts_fulldf[,3], model="ZZZ", h= 12, holdout=FALSE, silent=F)
 hydro_2023_forecast<-forecast(hydro_2023, h=12, start=c(2008,1))
+```
 
+
+
+*Figure 27. Forecasted SES model for hydro.*
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 #nuclear, SARIMA
 nuclear_2023 <- auto.arima(ts_fulldf[,4])
-print(nuclear_2023)
+#print(nuclear_2023)
 nuclear_2023_forecast <- forecast(object = nuclear_2023, h = 12)
 
 #wind, SES 
 wind_2023 <- es(ts_fulldf[,5], model="ZZZ", h= 12, holdout=FALSE, silent=F)
 wind_2023_forecast<-forecast(wind_2023, h=12, start=c(2008,1))
+```
 
+
+*Figure 28. Forecasted SES model for wind.*
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 #df with all forecasts 
 df_2023_forecast <- data.frame(date = seq(as.Date("2023/01/01"), by = "month", length.out = 12),
                       Coal_f = coal_2023_forecast$mean,
@@ -1049,6 +1088,8 @@ ggplot(forecasted_df) +
 
 #caption that the darker shades of each color are the forecasted ones 
 ```
+
+*Figure 29. ERCOT monthly generation for each fuel type and forecasts. The forecast for each fuel type are the corresponding darker shades of each color.*
 
 
 #### Summary and Conclusions

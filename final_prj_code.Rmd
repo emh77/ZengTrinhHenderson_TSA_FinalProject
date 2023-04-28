@@ -720,21 +720,44 @@ The SARIMA model performs best for nuclear as shown in the table of accuracy sco
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 #Model 1: SARIMA
 nuclear_sarima_autofit <- auto.arima(ts_train[,4])
-print(nuclear_sarima_autofit)
+#print(nuclear_sarima_autofit)
 nuclear_sarima_forecast <- forecast(object = nuclear_sarima_autofit, h = 12)
 
 #Model 2: Seasonal SES
 nuclear_sses <- es(ts_train[,4], model="ZZZ", h= 12, holdout=FALSE, silent=F)
 nuclear_sses_forecast<-forecast(nuclear_sses, h=12, start=c(2008,1))
+```
 
+
+*Figure 17. Seasonal SES model for nuclear generation.*
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 #Model 3: SS with StructTS()
 nuclear_ss_model <- StructTS(ts_train[,4], type="BSM",fixed=c(NA,NA,NA,NA)) 
 nuclear_ss_forecast<- forecast(nuclear_ss_model, h=12)
 
 checkresiduals(nuclear_sarima_autofit)
-checkresiduals(nuclear_sses)
-checkresiduals(nuclear_ss_model)
+```
 
+
+
+*Figure 18. Residuals for SARIMA model for nuclear generation.*
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+checkresiduals(nuclear_sses)
+```
+
+
+*Figure 19. Residuals for SSES model for nuclear generation.*
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+checkresiduals(nuclear_ss_model)
+```
+
+
+
+*Figure 20. Residuals for StructTS model for nuclear generation.*
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 #df with test data and forecasts 
 df_nuclear <- data.frame(date = df_test$date,
                       test = df_test$Nuclear,
@@ -758,9 +781,13 @@ ggplot(df_nuclear) +
 #ADD CAPTION
 ```
 
+*Figure 21. 2022 nuclear generation forecast for each model; the original 2022 data is in black.*
+
 #### Scores for Nuclear Forecasts 
 We checked the accuracy of each forecast to determine which model was the most accurate.
 
+
+*Table 5. Accuracy scores for models for Nuclear generation.*
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 #test the accuracy of the models 
 nuclear1_scores <- accuracy(nuclear_sarima_forecast, ts_test[,4], test=NULL)

@@ -421,21 +421,36 @@ The BSM State Space (StructTS) model performs best for gas as shown in the table
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 #Model 1: SARIMA
 gas_sarima_autofit <- auto.arima(ts_train[,2])
-print(gas_sarima_autofit)
+#print(gas_sarima_autofit)
 gas_sarima_forecast <- forecast(object = gas_sarima_autofit, h = 12)
 
 #Model 2: Seasonal SES
 gas_sses <- es(ts_train[,2], model="ZZZ", h= 12, holdout=FALSE, silent=F)
 gas_sses_forecast<-forecast(gas_sses, h=12, start=c(2008,1))
+```
 
+*Figure 7. Seasonal SES Model for Gas generation data.*
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 #Model 3: SS with StructTS()
 gas_ss_model <- StructTS(ts_train[,2], type="BSM",fixed=c(NA,NA,NA,NA)) 
 gas_ss_forecast<- forecast(gas_ss_model, h=12)
 
 checkresiduals(gas_sarima_autofit)
-checkresiduals(gas_sses)
-checkresiduals(gas_ss_model, plot=TRUE)
+```
 
+*Figure 8. Residuals for SARIMA model for Gas generation data.*
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+checkresiduals(gas_sses)
+```
+
+*Figure 9. Residuals for SSES model for Gas generation data.*
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+checkresiduals(gas_ss_model, plot=TRUE)
+```
+
+*Figure 10. Residuals for StructTS model for Gas generation data.*
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 #df with test data and forecasts 
 df_gas <- data.frame(date = df_test$date,
                       test = df_test$Gas,
@@ -459,9 +474,13 @@ ggplot(df_gas) +
 #ADD CAPTION
 ```
 
+*Figure 11. 2022 gas generation forecast for each model; the original 2022 data is in black.*
+
 #### Scores for Gas Forecasts 
 
 We compared the accuracy scores for the three forecasts to determine which model had the best forecast.
+
+*Table 3. Accuracy scores for models for Gas generation.*
 ```{r message=FALSE, warning=FALSE}
 #test the accuracy of the models 
 gas1_scores <- accuracy(gas_sarima_forecast, ts_test[,2], test=NULL)

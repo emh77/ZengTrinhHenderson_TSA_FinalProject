@@ -274,7 +274,7 @@ ggplot(df_coal_1) +
 
 The State Space (StructTS) model performs best for coal as shown in the table of accuracy scores. 
 The residuals for SES is best but has the worst accuracy scores tied with SARIMA.
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #Model 1: SARIMA
 coal_sarima_autofit <- auto.arima(ts_train[,1])
 #print(coal_sarima_autofit)
@@ -287,7 +287,7 @@ coal_sses_forecast<-forecast(coal_sses, h=12, start=c(2008,1)) #@kristen, we do 
 ```
 
   
-*Figure 2. Seasonal SES model for Coal.*
+
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 #Model 3: SS with StructTS()
@@ -297,21 +297,21 @@ coal_ss_forecast<- forecast(coal_ss_model, h=12)
 checkresiduals(coal_sarima_autofit)
 ```
 
-*Figure 3. Residuals for the ARIMA model for Coal.*
+*Figure 2. Residuals for the ARIMA model for Coal.*
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 checkresiduals(coal_sses)
 ```
 
   
-*Figure 4. Residuals for the SSES model for Coal.*
+*Figure 3. Residuals for the SSES model for Coal.*
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 checkresiduals(coal_ss_model, plot=TRUE)
 ```
 
   
-*Figure 5. Residuals for the StructTS model for Coal.*
+*Figure 4. Residuals for the StructTS model for Coal.*
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 #df with test data and forecasts 
@@ -337,7 +337,7 @@ ggplot(df_coal) +
 #ADD CAPTION DESCRIBING THAT THIS IS A FORECAST
 ```
 
-*Figure 6. 2022 coal generation forecast for each model; the original 2022 data is in black.*  
+*Figure 5. 2022 coal generation forecast for each model; the original 2022 data is in black.*  
 
 #### Accuracy Scores for Coal Forecasts 
 
@@ -426,7 +426,7 @@ par(mfrow=c(1,1))
 
 The BSM State Space (StructTS) model performs best for gas as shown in the table of accuracy scores. However, the ACF of residuals of the Exponential Smoothing model shows no significant lags, which once again suggests it better captures trends. The ES model also shows more white noise in its residuals and is more normally distributed. 
 
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #Model 1: SARIMA
 gas_sarima_autofit <- auto.arima(ts_train[,2])
 #print(gas_sarima_autofit)
@@ -437,7 +437,7 @@ gas_sses <- es(ts_train[,2], model="ZZZ", h= 12, holdout=FALSE, silent=F)
 gas_sses_forecast<-forecast(gas_sses, h=12, start=c(2008,1))
 ```
 
-*Figure 7. Seasonal SES Model for Gas generation data.*
+
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 #Model 3: SS with StructTS()
 gas_ss_model <- StructTS(ts_train[,2], type="BSM",fixed=c(NA,NA,NA,NA)) 
@@ -446,17 +446,17 @@ gas_ss_forecast<- forecast(gas_ss_model, h=12)
 checkresiduals(gas_sarima_autofit)
 ```
 
-*Figure 8. Residuals for SARIMA model for Gas generation data.*
+*Figure 6. Residuals for SARIMA model for Gas generation data.*
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 checkresiduals(gas_sses)
 ```
 
-*Figure 9. Residuals for SSES model for Gas generation data.*
+*Figure 7. Residuals for SSES model for Gas generation data.*
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 checkresiduals(gas_ss_model, plot=TRUE)
 ```
 
-*Figure 10. Residuals for StructTS model for Gas generation data.*
+*Figure 8. Residuals for StructTS model for Gas generation data.*
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 #df with test data and forecasts 
@@ -482,7 +482,7 @@ ggplot(df_gas) +
 #ADD CAPTION
 ```
 
-*Figure 11. 2022 gas generation forecast for each model; the original 2022 data is in black.*
+*Figure 9. 2022 gas generation forecast for each model; the original 2022 data is in black.*
 
 #### Scores for Gas Forecasts 
 
@@ -569,7 +569,7 @@ plot(des_hydro_arima_forecast)
 #### Hydro Forecasting
 
 The SES model in general performs best for hydro as shown in the table of accuracy scores. 
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #Model 1: SARIMA
 hydro_sarima_autofit <- auto.arima(ts_train[,3])
 #print(hydro_sarima_autofit)
@@ -580,7 +580,7 @@ hydro_sses <- es(ts_train[,3], model="ZZZ", h= 12, holdout=FALSE, silent=F)
 hydro_sses_forecast<-forecast(hydro_sses, h=12, start=c(2008,1))
 ```
 
-*Figure 12. Seasonal SES model for hydro generation.*
+
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 #Model 3: SS with StructTS()
@@ -590,21 +590,21 @@ hydro_ss_forecast<- forecast(hydro_ss_model, h=12)
 checkresiduals(hydro_sarima_autofit)
 ```
 
-*Figure 13. Residuals for SARIMA model for hydro generation.*
+*Figure 10. Residuals for SARIMA model for hydro generation.*
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 checkresiduals(hydro_sses, plot=TRUE)
 ```
 
 
-*Figure 14. Residuals for SSES model for hydro generation.*
+*Figure 11. Residuals for SSES model for hydro generation.*
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 checkresiduals(hydro_ss_model)
 ```
 
 
-*Figure 15. Residuals for StructTS model for hydro generation.*
+*Figure 12. Residuals for StructTS model for hydro generation.*
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 #df with test data and forecasts 
@@ -631,7 +631,7 @@ ggplot(df_hydro) +
 ```
 
 
-*Figure 16. 2022 hydro generation forecast for each model; the original 2022 data is in black.*
+*Figure 13. 2022 hydro generation forecast for each model; the original 2022 data is in black.*
 
 #### Scores for Hydro Forecasts 
 We calculated the accuracy scores to confirm which model generated the best forecast for hydro.
@@ -717,7 +717,7 @@ plot(des_nuclear_arima_forecast)
 
 The SARIMA model performs best for nuclear as shown in the table of accuracy scores. The residuals for all models show a similar number of significant ACF lags and distorted (ie not distinctly normal) histograms suggesting the forecasted models do not capture all of the trends.  
 
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #Model 1: SARIMA
 nuclear_sarima_autofit <- auto.arima(ts_train[,4])
 #print(nuclear_sarima_autofit)
@@ -729,7 +729,7 @@ nuclear_sses_forecast<-forecast(nuclear_sses, h=12, start=c(2008,1))
 ```
 
 
-*Figure 17. Seasonal SES model for nuclear generation.*
+
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 #Model 3: SS with StructTS()
@@ -741,13 +741,13 @@ checkresiduals(nuclear_sarima_autofit)
 
 
 
-*Figure 18. Residuals for SARIMA model for nuclear generation.*
+*Figure 14. Residuals for SARIMA model for nuclear generation.*
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 checkresiduals(nuclear_sses)
 ```
 
 
-*Figure 19. Residuals for SSES model for nuclear generation.*
+*Figure 15. Residuals for SSES model for nuclear generation.*
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 checkresiduals(nuclear_ss_model)
@@ -755,7 +755,7 @@ checkresiduals(nuclear_ss_model)
 
 
 
-*Figure 20. Residuals for StructTS model for nuclear generation.*
+*Figure 16. Residuals for StructTS model for nuclear generation.*
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 #df with test data and forecasts 
@@ -781,7 +781,7 @@ ggplot(df_nuclear) +
 #ADD CAPTION
 ```
 
-*Figure 21. 2022 nuclear generation forecast for each model; the original 2022 data is in black.*
+*Figure 17. 2022 nuclear generation forecast for each model; the original 2022 data is in black.*
 
 #### Scores for Nuclear Forecasts 
 We checked the accuracy of each forecast to determine which model was the most accurate.
@@ -922,7 +922,7 @@ df_wind <- data.frame(date = df_train$date[(2:168)],
 
 The SES model in general performs best for wind as shown in the table of accuracy scores. This aligns with the report of residuals, which shows few significant lags in the ACF and normal distribution in the histogram. 
 
-```{r message=FALSE, warning=FALSE}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #Model 1: SARIMA
 wind_sarima_autofit <- auto.arima(ts_train[,5])
 #print(wind_sarima_autofit)
@@ -934,7 +934,7 @@ wind_sses_forecast<-forecast(wind_sses, h=12, start=c(2008,1))
 ```
 
 
-*Figure 22. Seasonal SES model for wind generation.*
+
 
 
 ```{r message=FALSE, warning=FALSE}
@@ -946,21 +946,21 @@ checkresiduals(wind_sarima_autofit, plot=TRUE)
 ```
 
 
-*Figure 23. Residuals for SARIMA model for wind generation.*
+*Figure 18. Residuals for SARIMA model for wind generation.*
 
 ```{r message=FALSE, warning=FALSE}
 checkresiduals(wind_sses, plot=TRUE)
 ```
 
 
-*Figure 24. Residuals for SSES model for wind generation.*
+*Figure 19. Residuals for SSES model for wind generation.*
 
 ```{r message=FALSE, warning=FALSE}
 checkresiduals(wind_ss_model, plot=TRUE)
 ```
 
 
-*Figure 25. Residuals for StructTS model for wind generation.*
+*Figure 20. Residuals for StructTS model for wind generation.*
 
 ```{r message=FALSE, warning=FALSE}
 #df with test data and forecasts 
@@ -986,7 +986,7 @@ ggplot(df_wind) +
 #ADD CAPTION
 ```
 
-*Figure 26. 2022 wind generation forecast for each model; the original 2022 data is in black.*
+*Figure 21. 2022 wind generation forecast for each model; the original 2022 data is in black.*
 
 #### Scores for Wind Forecasts 
 We calculated the accuracy scores for each model to determine the best model fit.
@@ -1011,7 +1011,7 @@ print(wind_scores)
 ```
 
 #### Forecasting 2023 ERCOT generation using the best models 
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #best models: Coal: BSM, Gas: BSM, Hydro: SES , Nuclear: SARIMA, Wind: SES
 
 #forecast into the future, training data on full dataset now, df
@@ -1032,10 +1032,9 @@ hydro_2023_forecast<-forecast(hydro_2023, h=12, start=c(2008,1))
 
 
 
-*Figure 27. Forecasted SES model for hydro.*
 
 
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+```{r message=FALSE, warning=FALSE, include=FALSE}
 #nuclear, SARIMA
 nuclear_2023 <- auto.arima(ts_fulldf[,4])
 #print(nuclear_2023)
@@ -1047,7 +1046,6 @@ wind_2023_forecast<-forecast(wind_2023, h=12, start=c(2008,1))
 ```
 
 
-*Figure 28. Forecasted SES model for wind.*
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 #df with all forecasts 
@@ -1089,7 +1087,7 @@ ggplot(forecasted_df) +
 #caption that the darker shades of each color are the forecasted ones 
 ```
 
-*Figure 29. ERCOT monthly generation for each fuel type and forecasts. The forecast for each fuel type are the corresponding darker shades of each color.*
+*Figure 22. ERCOT monthly generation for each fuel type and forecasts. The forecast for each fuel type are the corresponding darker shades of each color.*
 
 
 #### Summary and Conclusions

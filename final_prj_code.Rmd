@@ -154,12 +154,15 @@ ggplot(df_train) +
                                 "Hydro" = "#0072B2", "Nuclear"="#F0E442", "Wind"="#CC79A7"))+
   scale_x_date(date_breaks = "1 year", date_labels = "%Y")+
   labs(color="",
-       title = 'ERCOT Monthly Generation',
+       title = 'Table 1. ERCOT Monthly Generation and the first ten rows of data',
        y='Generation (1000 MWh)',
        x='Year')+
   theme_light()+
   theme(legend.position = "bottom")
 ```
+*Figure 1. ERCOT monthly generation by fuel type from 2008-2022*
+
+
 
 #### Create TS objects and visualize ACF and PACF
 
@@ -263,28 +266,46 @@ ggplot(df_coal_1) +
        x='Year')
 ```
 
+ 
+
 #### Coal Forecasting 
 
 The State Space (StructTS) model performs best for coal as shown in the table of accuracy scores. 
-[residuals for SES is best but has the worst accuracy scores tied with SARIMA]
+The residuals for SES is best but has the worst accuracy scores tied with SARIMA.
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 #Model 1: SARIMA
 coal_sarima_autofit <- auto.arima(ts_train[,1])
-print(coal_sarima_autofit)
+#print(coal_sarima_autofit)
 coal_sarima_forecast <- forecast(object = coal_sarima_autofit, h = 12)
+
 
 #Model 2: Seasonal SES
 coal_sses <- es(ts_train[,1], model="ZZZ", h= 12, holdout=FALSE, silent=F)
-coal_sses_forecast<-forecast(coal_sses, h=12, start=c(2008,1)) #@kristen, we do actually need to keep this 
+coal_sses_forecast<-forecast(coal_sses, h=12, start=c(2008,1)) #@kristen, we do actually need to keep this
+```
+*Figure 2. Seasonal SES model for Coal.*
 
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 #Model 3: SS with StructTS()
 coal_ss_model <- StructTS(ts_train[,1], type="BSM",fixed=c(NA,NA,NA,NA)) 
 coal_ss_forecast<- forecast(coal_ss_model, h=12)
 
 checkresiduals(coal_sarima_autofit)
-checkresiduals(coal_sses)
-checkresiduals(coal_ss_model, plot=TRUE)
+```
 
+*Figure 3. Residuals for the ARIMA model for Coal.*
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+checkresiduals(coal_sses)
+```
+*Figure 4. Residuals for the SSES model for Coal.*
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+checkresiduals(coal_ss_model, plot=TRUE)
+```
+*Figure 5. Residuals for the StructTS model for Coal.*
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 #df with test data and forecasts 
 df_coal <- data.frame(date = df_test$date,
                       test = df_test$Coal,
@@ -308,9 +329,13 @@ ggplot(df_coal) +
 #ADD CAPTION DESCRIBING THAT THIS IS A FORECAST
 ```
 
+*Figure 6. 2022 coal generation forecast for each model; the original 2022 data is in black.*  
+
 #### Accuracy Scores for Coal Forecasts 
 
 We then compared the accuracy scores (ME, RMSE, MAE, MPE, and MAPE) for each of the forecasts.
+
+*Table 2. Accuracy scores for models for Coal generation.*
 ```{r message=FALSE, warning=FALSE}
 #test the accuracy of the models 
 coal1_scores <- accuracy(coal_sarima_forecast, ts_test[,1], test=NULL)
